@@ -55,13 +55,15 @@ static std::u32string utf8_to_utf32(const std::string& utf8) //把8位变成32�
 class Dictionary {
 public:
     bool load(const std::string& path); // 加载 scheme 文件
-    std::vector<std::u32string> lookup(const std::string& key) const; // 返回当前 key 的所有候选
+    std::vector<std::u32string> Lookup(const std::string& key) const; // 返回当前 key 的所有候选
+    std::vector<std::u32string> LookupByPrefix(const std::string& prefix) const;
     void debugPrint() const;// 调试：打印整个字典
     private:
     std::unordered_map<std::string, std::vector<std::u32string>> dict_;
     // key: 输入法编码（如 "th", "aa", "ts"）
     // value: IPA 字符（UTF-32 形式） schemes
 };
+
 
 //执行层
 bool Dictionary::load(const std::string& path)
@@ -92,7 +94,7 @@ bool Dictionary::load(const std::string& path)
     return true;
 }
 
-std::vector<std::u32string> Dictionary::lookup(const std::string& key) const
+std::vector<std::u32string> Dictionary::Lookup(const std::string& key) const
 {
     auto it = dict_.find(key);
     if (it == dict_.end())
@@ -101,6 +103,21 @@ std::vector<std::u32string> Dictionary::lookup(const std::string& key) const
     return it->second;  
 }
 
+std::vector<std::u32string> Dictionary::LookupByPrefix(const std::string& prefix) const {
+    std::vector<std::u32string> result;
+
+    for (const auto& [key, values] : dict_) {
+        if (key == prefix || key.rfind(prefix, 0) == 0) {
+            result.insert(result.end(), values.begin(), values.end());
+        }
+    }
+
+    // 去重
+    std::sort(result.begin(), result.end());
+    result.erase(std::unique(result.begin(), result.end()), result.end());
+
+    return result;
+}
 void Dictionary::debugPrint() const
 {
     for (auto& [key, vec] : dict_) {

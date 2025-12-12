@@ -27,8 +27,7 @@ public:
     Dictionary* dict_;
     std::string buffer_;  
     Mode mode_;
-}
-
+};
 // 执行层
 Engine::Engine(Dictionary* dict)
     : dict_(dict), mode_(Mode::IPA)
@@ -65,7 +64,7 @@ std::vector<std::u32string> Engine::getCandidates() const
     if (!dict_)
         return {};
 
-    return dict_->lookup(buffer_);
+    return dict_->Lookup(buffer_);
 }
 
 std::u32string Engine::chooseCandidate(size_t index)
@@ -73,7 +72,7 @@ std::u32string Engine::chooseCandidate(size_t index)
     if (!dict_)
         return U"";
 
-    auto cand = dict_->lookup(buffer_);
+    auto cand = dict_->Lookup(buffer_);
     if (index >= cand.size())
         return U"";
 

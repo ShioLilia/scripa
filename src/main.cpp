@@ -1,11 +1,13 @@
 #include "Dic.hpp"
 #include "Engine.hpp"
+#include "Loader.hpp"
 #include <iostream>
 
 int main() {
     Dictionary dict;
-    dict.load("scheme/kunyomi.txt");
-
+    SchemeLoader loader;
+    int count = loader.loadSchemes("schemes/", dict);
+    std::cout << "Loaded scheme files: " << count << "\n";
     Engine engine(&dict);
 
     while (true) {
