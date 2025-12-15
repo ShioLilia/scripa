@@ -163,27 +163,3 @@ Br ◌˞
 W ◌͡ 
 L ː
 
-T55 ꜒
-T44 ꜓
-T33 ꜔
-T22 ꜕
-T11 ꜖
-T5T ꜈
-T4T ꜉
-T3T ꜊
-T2T ꜋
-T1T ꜌
-T5 ꜍
-T4 ꜎
-T3 ꜏
-T2 ꜐
-T1 ꜑
-
-YiP ꜀
-YaP ꜁
-YiS ꜂
-YaS ꜃
-YiQ ꜄
-YaQ ꜅
-YiR ꜆
-YaR ꜇
