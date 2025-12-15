@@ -26,7 +26,7 @@
 
 - **约定与注意事项（针对 AI 的编辑建议）**
   - 不要改变 `Dictionary` 的外部 API（`load`, `lookup`），因为 `Engine` 与其他模块直接依赖这些接口。
-  - 修改 `schemes/` 文本格式时，保持每行 `key value` 的简洁解析格式（参考 `src/core/Dic.hpp` 的解析逻辑），否则需要同时更新解析逻辑。
+  - 不要修改 `schemes/` 中txt文档的文本格式，保持每行 `key value` 的简洁解析格式（参考 `src/core/Dic.hpp` 的解析逻辑），否则需要同时更新解析逻辑。每行右边的IPA音标对应左边不止一种输入的情况。
   - 关于编码：内部候选使用 `std::u32string`（UTF-32），输入与 scheme 文件为 UTF-8。任何对字符编码的改动必须同时更新 `utf8_to_utf32` 使用处。
 
 - **常见修改场景与定位策略**

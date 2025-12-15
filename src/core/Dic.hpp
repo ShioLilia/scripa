@@ -5,6 +5,8 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <algorithm>
+#include <cctype>
 
 static std::u32string utf8_to_utf32(const std::string& utf8) //把8位变成32位
 {
@@ -78,17 +80,38 @@ bool Dictionary::load(const std::string& path)
     size_t lineno = 0;
 
     while (std::getline(fin, line)) {
-        ++lineno;   
-        if (line.size() == 0 || line[0] == '#')
-            continue; // 去掉注释（# 开头）
-        std::istringstream iss(line);
+        ++lineno;
+        // 去除行首行尾空白
+        size_t start = 0;
+        while (start < line.size() && std::isspace((unsigned char)line[start])) ++start;
+        if (start >= line.size()) continue;
+        if (line[start] == '#') continue; // 注释
+
+        std::istringstream iss(line.substr(start));
         std::string key, value_utf8;
 
         if (!(iss >> key >> value_utf8)) {
             continue;    // 空行或格式错误
         }
+
         std::u32string value = utf8_to_utf32(value_utf8); // UTF-32 转码（例如 θ → U+03B8）
-        dict_[key].push_back(value); // 插入到字典中
+
+        // 支持逗号分隔的多个左键，例如: "qg,qz ɢ"
+        size_t p = 0;
+        while (p < key.size()) {
+            size_t q = key.find(',', p);
+            std::string sub = (q == std::string::npos) ? key.substr(p) : key.substr(p, q - p);
+            // trim sub
+            size_t a = 0, b = sub.size();
+            while (a < b && std::isspace((unsigned char)sub[a])) ++a;
+            while (b > a && std::isspace((unsigned char)sub[b-1])) --b;
+            if (a < b) {
+                std::string final_key = sub.substr(a, b - a);
+                dict_[final_key].push_back(value);
+            }
+            if (q == std::string::npos) break;
+            p = q + 1;
+        }
     }
 
     return true;
@@ -126,4 +149,28 @@ void Dictionary::debugPrint() const
             std::cout << "[UTF32 size=" << u32.size() << "] ";
         std::cout << "\n";
     }
+}
+
+static std::string utf32_to_utf8(const std::u32string& in)
+{
+    std::string out;
+    out.reserve(in.size());
+    for (char32_t cp : in) {
+        if (cp <= 0x7F) {
+            out.push_back(static_cast<char>(cp));
+        } else if (cp <= 0x7FF) {
+            out.push_back(static_cast<char>(0xC0 | ((cp >> 6) & 0x1F)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        } else if (cp <= 0xFFFF) {
+            out.push_back(static_cast<char>(0xE0 | ((cp >> 12) & 0x0F)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        } else {
+            out.push_back(static_cast<char>(0xF0 | ((cp >> 18) & 0x07)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        }
+    }
+    return out;
 }
