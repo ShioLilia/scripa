@@ -50,11 +50,12 @@ bool Engine::inputChar(char c)
         return true; // 那还说什么了，直接给了
     }
     if (c == ' ') {
-        // 空格键即为直接输入第一个候选内容
+        // 空格键：提交第一个候选
         return true;
     }
     buffer_.push_back(c);
-    return false; //其他情况
+    // 返回是否有候选（总是返回 true 让 UI 刷新）
+    return true;
 }
 
 std::vector<std::u32string> Engine::getCandidates() const

@@ -54,6 +54,17 @@ bool ScripaTSF::OnKeyDown(wchar_t ch)
     return false;
 }
 
+void ScripaTSF::ToggleMode()
+{
+    engine_.toggleMode();
+}
+
+bool ScripaTSF::GetMode() const
+{
+    // true = IPA, false = ENG
+    return engine_.getMode() == Engine::Mode::IPA;
+}
+
 std::wstring ScripaTSF::GetComposition() const
 {
     // Engine::getBuffer() returns an ASCII-friendly std::string for now

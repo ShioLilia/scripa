@@ -19,6 +19,12 @@ public:
     // Handle a key (wide char). Returns true if the key was handled by the composition engine.
     bool OnKeyDown(wchar_t ch);
 
+    // Toggle between ENG and IPA mode
+    void ToggleMode();
+
+    // Get current mode (true = IPA, false = ENG)
+    bool GetMode() const;
+
     // Get the current composition (UTF-16) to be shown in the TSF composition
     std::wstring GetComposition() const;
 
