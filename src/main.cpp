@@ -1,6 +1,6 @@
-#include "Dic.hpp"
-#include "Engine.hpp"
-#include "Loader.hpp"
+#include "core/Dic.hpp"
+#include "core/Engine.hpp"
+#include "core/Loader.hpp"
 #include <iostream>
 #include <string>
 #ifdef _WIN32
