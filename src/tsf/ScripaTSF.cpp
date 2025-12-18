@@ -1,4 +1,5 @@
 #include "ScripaTSF.h"
+#include "../core/Loader.hpp"
 #include <locale>
 #include <codecvt>
 #include <filesystem>
@@ -16,18 +17,10 @@ ScripaTSF::~ScripaTSF()
 
 bool ScripaTSF::Init()
 {
-    // Try to load all files under the repository-level schemes/ directory.
-    // In a real build you'd use an install path or resource; this is a development convenience.
-    try {
-        for (auto &p : std::filesystem::directory_iterator(std::filesystem::path("schemes"))) {
-            if (p.is_regular_file()) {
-                dict_.load(p.path().string());
-            }
-        }
-    } catch (...) {
-        // directory may not exist; still continue
-    }
-    return true;
+    // 使用 SchemeLoader 加载所有已启用的字库
+    int count = loader_.loadSchemes(schemes_path_, dict_);
+    std::cout << "[ScripaTSF] Loaded " << count << " scheme file(s)\n";
+    return count > 0;
 }
 
 void ScripaTSF::Uninit()
@@ -82,4 +75,45 @@ std::vector<std::wstring> ScripaTSF::GetCandidates() const
         out.push_back(utf8_to_wstring(utf8));
     }
     return out;
+}
+
+// 字库管理接口实现
+void ScripaTSF::EnableScheme(const std::string& schemeName)
+{
+    loader_.enableScheme(schemeName);
+}
+
+void ScripaTSF::DisableScheme(const std::string& schemeName)
+{
+    loader_.disableScheme(schemeName);
+}
+
+bool ScripaTSF::IsSchemeEnabled(const std::string& schemeName) const
+{
+    return loader_.isSchemeEnabled(schemeName);
+}
+
+std::vector<std::string> ScripaTSF::GetAvailableSchemes() const
+{
+    return loader_.getAvailableSchemes(schemes_path_);
+}
+
+std::vector<std::string> ScripaTSF::GetEnabledSchemes() const
+{
+    return loader_.getEnabledSchemes();
+}
+
+bool ScripaTSF::ReloadSchemes()
+{
+    // 清空当前字典
+    dict_.clear();
+    
+    // 重新加载所有启用的字库
+    int count = loader_.loadSchemes(schemes_path_, dict_);
+    std::cout << "[ScripaTSF] Reloaded " << count << " scheme file(s)\n";
+    
+    // 清空当前输入缓冲
+    engine_.clearBuffer();
+    
+    return count > 0;
 }

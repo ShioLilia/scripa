@@ -2,6 +2,8 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include <locale>
+#include <codecvt>
 #include "../tsf/ScripaTSF.h"
 #include <gdiplus.h>
 #include <shellapi.h>
@@ -72,6 +74,61 @@ RECT g_btnMode = {0, 0, 0, 0};
 RECT g_btnLeft = {0, 0, 0, 0};
 RECT g_btnRight = {0, 0, 0, 0};
 RECT g_btnSettings = {0, 0, 0, 0};
+
+// 字库选择对话框
+void ShowSchemeSelectionDialog(HWND hwndParent) {
+    // 获取所有可用字库
+    auto available = g_backend.GetAvailableSchemes();
+    
+    if (available.empty()) {
+        MessageBoxW(hwndParent, L"No scheme files found in schemes/ directory.", L"Scheme Selection", MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+    
+    // 构建消息文本
+    std::wstring msg = L"Available Schemes (check to enable):\n\n";
+    for (size_t i = 0; i < available.size(); ++i) {
+        bool enabled = g_backend.IsSchemeEnabled(available[i]);
+        msg += std::to_wstring(i + 1) + L". ";
+        msg += enabled ? L"[✓] " : L"[ ] ";
+        
+        // 转换为 wstring
+        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
+        msg += conv.from_bytes(available[i]) + L"\n";
+    }
+    
+    msg += L"\nCurrently Enabled: ";
+    auto enabled_list = g_backend.GetEnabledSchemes();
+    if (enabled_list.empty()) {
+        msg += L"None";
+    } else {
+        for (size_t i = 0; i < enabled_list.size(); ++i) {
+            if (i > 0) msg += L", ";
+            std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
+            msg += conv.from_bytes(enabled_list[i]);
+        }
+    }
+    
+    msg += L"\n\nEnter scheme number to toggle, or 'R' to reload schemes:";
+    
+    // 显示输入框（简化版，实际应该用对话框）
+    // 这里使用简单的 MessageBox 作为演示
+    int result = MessageBoxW(hwndParent, msg.c_str(), L"Scheme Selection - Settings", 
+                             MB_OKCANCEL | MB_ICONINFORMATION);
+    
+    if (result == IDOK) {
+        // 实际项目中应该使用自定义对话框
+        // 这里只是演示，暂时弹窗说明功能已集成
+        MessageBoxW(hwndParent, 
+            L"Scheme selection UI integrated!\n\n"
+            L"To toggle schemes:\n"
+            L"1. Use g_backend.EnableScheme(\"custom\")\n"
+            L"2. Use g_backend.DisableScheme(\"simple\")\n"
+            L"3. Call g_backend.ReloadSchemes()\n\n"
+            L"Full UI dialog can be implemented with custom window + checkboxes.",
+            L"Info", MB_OK);
+    }
+}
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -212,7 +269,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 return 0;
             }
             if (PtInRect(&g_btnSettings, POINT{x, y})) {
-                MessageBoxW(hwnd, L"Settings (TBD)", L"Scripa", MB_OK);
+                // 显示字库选择对话框
+                ShowSchemeSelectionDialog(hwnd);
                 return 0;
             }
 

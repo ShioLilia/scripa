@@ -59,8 +59,9 @@ public:
     bool load(const std::string& path); // 加载 scheme 文件
     std::vector<std::u32string> Lookup(const std::string& key) const; // 返回当前 key 的所有候选
     std::vector<std::u32string> LookupByPrefix(const std::string& prefix) const;
+    void clear(); // 清空字典
     void debugPrint() const;// 调试：打印整个字典
-    private:
+private:
     std::unordered_map<std::string, std::vector<std::u32string>> dict_;
     // key: 输入法编码（如 "th", "aa", "ts"）
     // value: IPA 字符（UTF-32 形式） schemes
@@ -141,6 +142,12 @@ std::vector<std::u32string> Dictionary::LookupByPrefix(const std::string& prefix
 
     return result;
 }
+
+void Dictionary::clear()
+{
+    dict_.clear();
+}
+
 void Dictionary::debugPrint() const
 {
     for (auto& [key, vec] : dict_) {
