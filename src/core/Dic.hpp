@@ -130,9 +130,9 @@ std::vector<std::u32string> Dictionary::Lookup(const std::string& key) const
 std::vector<std::u32string> Dictionary::LookupByPrefix(const std::string& prefix) const {
     std::vector<std::u32string> result;
 
-    for (const auto& [key, values] : dict_) {
-        if (key == prefix || key.rfind(prefix, 0) == 0) {
-            result.insert(result.end(), values.begin(), values.end());
+    for (const auto& pair : dict_) {
+        if (pair.first == prefix || pair.first.rfind(prefix, 0) == 0) {
+            result.insert(result.end(), pair.second.begin(), pair.second.end());
         }
     }
 
@@ -150,9 +150,9 @@ void Dictionary::clear()
 
 void Dictionary::debugPrint() const
 {
-    for (auto& [key, vec] : dict_) {
-        std::cout << key << " : ";
-        for (auto &u32 : vec)
+    for (const auto& pair : dict_) {
+        std::cout << pair.first << " : ";
+        for (const auto &u32 : pair.second)
             std::cout << "[UTF32 size=" << u32.size() << "] ";
         std::cout << "\n";
     }
