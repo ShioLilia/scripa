@@ -1,5 +1,6 @@
 #include "ScripaTSF.h"
 #include "../core/Loader.hpp"
+#include "../core/Dic.hpp"
 #include <locale>
 #include <codecvt>
 #include <filesystem>

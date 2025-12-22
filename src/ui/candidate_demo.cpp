@@ -2,9 +2,11 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include <algorithm>
 #include <locale>
 #include <codecvt>
 #include "../tsf/ScripaTSF.h"
+#include "../core/Dic.hpp"
 #include <gdiplus.h>
 #include <shellapi.h>
 #pragma comment(lib, "gdiplus.lib")
@@ -223,7 +225,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             // reset to first page on new composition
             int totalPages = (int)((g_ui.items.size() + g_ui.itemsPerPage - 1) / g_ui.itemsPerPage);
-            if (g_ui.pageIndex >= totalPages) g_ui.pageIndex = max(0, totalPages - 1);
+            if (g_ui.pageIndex >= totalPages) g_ui.pageIndex = std::max(0, totalPages - 1);
             g_ui.selected = 0;  // reset selection to first item
             InvalidateRect(hwnd, NULL, TRUE);
             return 0;
@@ -281,9 +283,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 int itemCount = (int)g_ui.items.size();
                 int per = g_ui.itemsPerPage;
                 int start = g_ui.pageIndex * per;
-                int shown = min(per, max(0, itemCount - start));
+                int shown = std::min(per, std::max(0, itemCount - start));
                 int padding = 8;
-                int itemW = max(48, (rc.right - rc.left - padding * shown) / max(1, shown));
+                int itemW = std::max(48, (rc.right - rc.left - padding * shown) / std::max(1, shown));
                 int itemH = 36;
                 for (int i = 0; i < shown; ++i) {
                     int idx = start + i;
@@ -414,9 +416,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 int itemCount = (int)g_ui.items.size();
                 int per = g_ui.itemsPerPage;
                 int start = g_ui.pageIndex * per;
-                int shown = min(per, max(0, itemCount - start));
+                int shown = std::min(per, std::max(0, itemCount - start));
                 int padding = 8;
-                int itemW = max(48, (rc.right - rc.left - padding * shown) / max(1, shown));
+                int itemW = std::max(48, (rc.right - rc.left - padding * shown) / std::max(1, shown));
                 int itemH = 36;
 
                 for (int i = 0; i < shown; ++i) {
@@ -447,7 +449,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 // draw page indicator
                 int totalPages = (int)((itemCount + per - 1) / per);
                 std::wstringstream pss;
-                pss << L"Page " << (g_ui.pageIndex + 1) << L"/" << max(1, totalPages);
+                pss << L"Page " << (g_ui.pageIndex + 1) << L"/" << std::max(1, totalPages);
                 RECT pageRc = { rc.left + 10, 44 + itemH + 8 + 8, rc.right - 10, 44 + itemH + 8 + 24 };
                 SetTextColor(hdc, RGB(80, 80, 80));
                 DrawTextW(hdc, pss.str().c_str(), (int)pss.str().size(), &pageRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);

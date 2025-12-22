@@ -3,6 +3,7 @@
 #include "core/Loader.hpp"
 #include <iostream>
 #include <string>
+#include <algorithm>
 #ifdef _WIN32
 #include <windows.h>
 #endif
