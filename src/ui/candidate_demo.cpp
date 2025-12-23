@@ -70,6 +70,31 @@ struct CandidateUI {
 static CandidateUI g_ui;
 static ScripaTSF g_backend;
 
+// 剪贴板辅助函数：复制文本到系统剪贴板
+static bool CopyToClipboard(HWND hwnd, const std::wstring& text) {
+    if (!OpenClipboard(hwnd)) {
+        return false;
+    }
+    EmptyClipboard();
+    
+    size_t size = (text.length() + 1) * sizeof(wchar_t);
+    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, size);
+    if (!hMem) {
+        CloseClipboard();
+        return false;
+    }
+    
+    wchar_t* pMem = (wchar_t*)GlobalLock(hMem);
+    if (pMem) {
+        memcpy(pMem, text.c_str(), size);
+        GlobalUnlock(hMem);
+    }
+    
+    SetClipboardData(CF_UNICODETEXT, hMem);
+    CloseClipboard();
+    return true;
+}
+
 // Button rects (cached)
 RECT g_btnDefault = {0, 0, 0, 0};
 RECT g_btnUser = {0, 0, 0, 0};
@@ -163,9 +188,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             int num = (int)(wParam - '1');
             int idx = g_ui.pageIndex * g_ui.itemsPerPage + num;
             if (idx >= 0 && idx < (int)g_ui.items.size()) {
-                std::wstringstream ss;
-                ss << L"Selected #" << (idx + 1) << L": " << g_ui.items[idx];
-                MessageBoxW(hwnd, ss.str().c_str(), L"Scripa Demo", MB_OK);
+                // 复制到剪贴板
+                std::wstring selectedText = g_ui.items[idx];
+                if (CopyToClipboard(hwnd, selectedText)) {
+                    std::wstringstream ss;
+                    // ss << L"Selected #" << (idx + 1) << L": " << g_ui.items[idx];
+                    // MessageBoxW(hwnd, ss.str().c_str(), L"Scripa Demo", MB_OK);
+                    ss << L"Selected & Copied:\n" << selectedText;
+                    MessageBoxW(hwnd, ss.str().c_str(), L"ScrIPA", MB_OK | MB_ICONINFORMATION);
+                } else {
+                    MessageBoxW(hwnd, L"Failed to copy to clipboard", L"ScrIPA Error", MB_OK | MB_ICONERROR);
+                }
+                
+                // 清空 buffer 并重置 UI
+                g_backend.clearBuffer();
+                g_ui.composition = L"";
+                g_ui.items = { L"" };
+                g_ui.selected = 0;
+                g_ui.pageIndex = 0;
+                InvalidateRect(hwnd, NULL, TRUE);
             }
             return 0;  // 阻止生成 WM_CHAR
         }
@@ -195,9 +236,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if (wParam == VK_RETURN) {
             int idx = g_ui.pageIndex * g_ui.itemsPerPage + g_ui.selected;
             if (idx >= 0 && idx < (int)g_ui.items.size()) {
-                std::wstringstream ss;
-                ss << L"Selected #" << (idx + 1) << L": " << g_ui.items[idx];
-                MessageBoxW(hwnd, ss.str().c_str(), L"Scripa Demo", MB_OK);
+                // 复制到剪贴板，测试后删除
+                std::wstring selectedText = g_ui.items[idx];
+                if (CopyToClipboard(hwnd, selectedText)) {
+                    std::wstringstream ss;
+                    // ss << L"Selected #" << (idx + 1) << L": " << g_ui.items[idx];
+                    // MessageBoxW(hwnd, ss.str().c_str(), L"Scripa Demo", MB_OK);
+                    ss << L"Selected & Copied:\n" << selectedText;
+                    MessageBoxW(hwnd, ss.str().c_str(), L"ScrIPA", MB_OK | MB_ICONINFORMATION);
+                } else {
+                    MessageBoxW(hwnd, L"Failed to copy to clipboard", L"ScrIPA Error", MB_OK | MB_ICONERROR);
+                }
+                
+                // 清空 buffer 并重置 UI
+                g_backend.clearBuffer();
+                g_ui.composition = L"";
+                g_ui.items = { L"" };
+                g_ui.selected = 0;
+                g_ui.pageIndex = 0;
+                InvalidateRect(hwnd, NULL, TRUE);
             }
             return 0;
         }
@@ -310,9 +367,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     RECT it = { left, top, left + itemW, top + itemH };
                     if (PtInRect(&it, POINT{x, y})) {
                         g_ui.selected = i;  // store page-relative index
-                        std::wstringstream ss;
-                        ss << L"Selected #" << (idx + 1) << L": " << g_ui.items[idx];
-                        MessageBoxW(hwnd, ss.str().c_str(), L"Scripa Demo", MB_OK);
+                        
+                        // 复制到剪贴板
+                        std::wstring selectedText = g_ui.items[idx];
+                        if (CopyToClipboard(hwnd, selectedText)) {
+                            std::wstringstream ss;
+                            // ss << L"Selected #" << (idx + 1) << L": " << g_ui.items[idx];
+                            // MessageBoxW(hwnd, ss.str().c_str(), L"Scripa Demo", MB_OK);
+                            ss << L"Selected & Copied:\n" << selectedText;
+                            MessageBoxW(hwnd, ss.str().c_str(), L"ScrIPA", MB_OK | MB_ICONINFORMATION);
+                        } else {
+                            MessageBoxW(hwnd, L"Failed to copy to clipboard", L"ScrIPA Error", MB_OK | MB_ICONERROR);
+                        }
+                        
+                        // 清空 buffer 并重置 UI
+                        g_backend.clearBuffer();
+                        g_ui.composition = L"";
+                        g_ui.items = { L"" };
+                        g_ui.selected = 0;
+                        g_ui.pageIndex = 0;
                         InvalidateRect(hwnd, NULL, TRUE);
                         return 0;
                     }

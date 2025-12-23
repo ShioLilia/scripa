@@ -22,8 +22,8 @@ g g
 qn ɴ
 q q
 qg,qz ɢ
-hk ʡ
-hq ʔ
+hk,h3 ʡ
+hq,h1 ʔ
 
 fw ɸ
 vw,bw β
@@ -46,7 +46,7 @@ wh ɰ
 qx χ
 rx,qxz ʁ
 h2p,hkx ħ
-hqx,hkxz,h2pz ʕ
+hqx,hkxz,h2pz,h2 ʕ
 h h
 hz,hc ɦ
 
@@ -163,3 +163,17 @@ Br ◌˞
 W ◌͡ 
 L ː
 
+Ph ʰ
+Phz ʱ
+Pj ʲ
+Pr ʳ
+Prh ʴ
+Psrh ʵ
+Prx，Pqxz ʶ
+Pw ʷ
+Py ʸ
+P' ʹ
+P' ˈ
+P'' ʺ
+Phq,Ph1 ˀ
+Phqx,Ph2 ˁ

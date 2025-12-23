@@ -71,8 +71,17 @@ std::vector<std::wstring> ScripaTSF::GetCandidates() const
     std::vector<std::wstring> out;
     out.reserve(cands.size());
     for (auto &u32 : cands) {
+        // 过滤掉 U+25CC (虚圆圈占位符)
+        std::u32string filtered;
+        filtered.reserve(u32.size());
+        for (char32_t ch : u32) {
+            if (ch != 0x25CC) {  // 跳过 U+25CC
+                filtered.push_back(ch);
+            }
+        }
+        
         // convert UTF-32 -> UTF-8 -> UTF-16
-        std::string utf8 = utf32_to_utf8(u32);
+        std::string utf8 = utf32_to_utf8(filtered);
         out.push_back(utf8_to_wstring(utf8));
     }
     return out;
