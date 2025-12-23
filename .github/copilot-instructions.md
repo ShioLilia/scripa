@@ -40,4 +40,6 @@
 
 请检查以上要点是否覆盖你的预期；我可以把其中任何一项扩展为更详细的编辑/PR 指南或补充构建脚本。
 
-cl /std:c++17 /utf-8 /EHsc /W4 /Zi /Fe:scripa\build\206.exe scripa\src\ui\candidate_demo.cpp /link gdiplus.lib user32.lib gdi32.lib shell32.lib
+cl /std:c++17 /utf-8 /EHsc /W4 /Zi /Fe:..\build\206.exe ..\src\ui\candidate_demo.cpp /link gdiplus.lib user32.lib gdi32.lib shell32.lib
+
+cl /std:c++17 /utf-8 /EHsc /W4 /Zi /Fe:..\build\207.exe ..\src\ui\candidate_demo.cpp ..\src\tsf\ScripaTSF.cpp /link gdiplus.lib user32.lib gdi32.lib shell32.lib

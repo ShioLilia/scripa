@@ -6,6 +6,13 @@
 #include <cstddef>
 #include <algorithm>
 #include "Dic.hpp"
+#ifdef max
+#undef max
+#endif
+#ifdef min
+#undef min
+#endif
+//maxmin宏污染
 
 class Engine {
 public:
@@ -21,6 +28,7 @@ public:
     std::u32string chooseCandidate(size_t index); //选择候选的某个
     std::string getBuffer() const { return buffer_; } //debug用的，返回buffer值
     void clearBuffer() { buffer_.clear(); } //然后清空buffer
+    void deleteLastChar() { if (!buffer_.empty()) buffer_.pop_back(); } //删除最后一个字符
     Mode getMode() const { return mode_; } //debug用的，返回mode值
 
 
@@ -30,12 +38,12 @@ private:
     Mode mode_;
 };
 // 执行层
-Engine::Engine(Dictionary* dict)
+inline Engine::Engine(Dictionary* dict)
     : dict_(dict), mode_(Mode::IPA)
 {
 }
 
-void Engine::toggleMode() {
+inline void Engine::toggleMode() {
     if (mode_ == Mode::IPA)
         mode_ = Mode::ENG;
     else
@@ -43,7 +51,7 @@ void Engine::toggleMode() {
     buffer_.clear();
 }
 
-bool Engine::inputChar(char c)
+inline bool Engine::inputChar(char c)
 {
     if (mode_ == Mode::ENG) {
         buffer_.push_back(c);
@@ -58,7 +66,7 @@ bool Engine::inputChar(char c)
     return true;
 }
 
-std::vector<std::u32string> Engine::getCandidates() const
+inline std::vector<std::u32string> Engine::getCandidates() const
 {
     if (mode_ == Mode::ENG)
         return {};
@@ -146,7 +154,7 @@ std::vector<std::u32string> Engine::getCandidates() const
                             // Track T-pattern conversions
                             int p_t_digits = getT_digitCount(p);
                             int new_t_converted = std::get<1>(a) + (was_in_dict && p_t_digits > 0 ? 1 : 0);
-                            int new_max_t_digits = std::max(std::get<2>(a), p_t_digits);
+                            int new_max_t_digits = (std::get<2>(a) > p_t_digits) ? std::get<2>(a) : p_t_digits;
                             int new_total_converted = std::get<3>(a) + (was_in_dict ? 1 : 0);
                             bool new_in_dict = std::get<4>(a) || was_in_dict;
                             next.emplace_back(
@@ -226,7 +234,7 @@ std::vector<std::u32string> Engine::getCandidates() const
     return result;
 }
 
-std::u32string Engine::chooseCandidate(size_t index)
+inline std::u32string  Engine::chooseCandidate(size_t index)
 {
     if (!dict_)
         return U"";

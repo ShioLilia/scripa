@@ -32,6 +32,10 @@ public:
     // Get candidates (UTF-16) for UI display
     std::vector<std::wstring> GetCandidates() const;
 
+    // 缓冲区操作
+    void deleteLastChar() { engine_.deleteLastChar(); }
+    void clearBuffer() { engine_.clearBuffer(); }
+
     // 字库管理接口
     void EnableScheme(const std::string& schemeName);
     void DisableScheme(const std::string& schemeName);
@@ -46,5 +50,5 @@ private:
     Dictionary dict_;
     Engine engine_ { &dict_ };
     SchemeLoader loader_;
-    std::string schemes_path_ = "schemes/";  // 默认路径
+    std::string schemes_path_ = "../schemes/";  // 默认路径（相对于 build/ 目录）
 };

@@ -69,7 +69,7 @@ private:
 
 
 //执行层
-bool Dictionary::load(const std::string& path)
+inline bool Dictionary::load(const std::string& path)
 {
     std::ifstream fin(path);
     if (!fin.is_open()) {
@@ -118,7 +118,7 @@ bool Dictionary::load(const std::string& path)
     return true;
 }
 
-std::vector<std::u32string> Dictionary::Lookup(const std::string& key) const
+inline std::vector<std::u32string> Dictionary::Lookup(const std::string& key) const
 {
     auto it = dict_.find(key);
     if (it == dict_.end())
@@ -127,7 +127,7 @@ std::vector<std::u32string> Dictionary::Lookup(const std::string& key) const
     return it->second;  
 }
 
-std::vector<std::u32string> Dictionary::LookupByPrefix(const std::string& prefix) const {
+inline std::vector<std::u32string> Dictionary::LookupByPrefix(const std::string& prefix) const {
     std::vector<std::u32string> result;
 
     for (const auto& pair : dict_) {
@@ -143,12 +143,12 @@ std::vector<std::u32string> Dictionary::LookupByPrefix(const std::string& prefix
     return result;
 }
 
-void Dictionary::clear()
+inline void Dictionary::clear()
 {
     dict_.clear();
 }
 
-void Dictionary::debugPrint() const
+inline void Dictionary::debugPrint() const
 {
     for (const auto& pair : dict_) {
         std::cout << pair.first << " : ";
@@ -158,7 +158,7 @@ void Dictionary::debugPrint() const
     }
 }
 
-static std::string utf32_to_utf8(const std::u32string& in)
+inline static std::string utf32_to_utf8(const std::u32string& in)
 {
     std::string out;
     out.reserve(in.size());

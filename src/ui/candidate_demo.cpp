@@ -15,7 +15,7 @@
 
 using namespace Gdiplus;
 
-static const wchar_t CLASS_NAME[] = L"ScripaCandidateDemo";
+static const wchar_t CLASS_NAME[] = L"ScrIPA";
 
 // Icon & toolbar structure
 struct IconSet {
@@ -30,15 +30,15 @@ struct IconSet {
     Bitmap* settings = nullptr;
 
     void LoadAll() {
-        bcg = new Bitmap(L"uicon\\bcg.png");
-        typing_bg = new Bitmap(L"uicon\\typing_bg.png");
-        user = new Bitmap(L"uicon\\user.png");
-        default_icon = new Bitmap(L"uicon\\default.png");
-        eng = new Bitmap(L"uicon\\ENG.png");
-        ipa = new Bitmap(L"uicon\\IPA.png");
-        left = new Bitmap(L"uicon\\left.png");
-        right = new Bitmap(L"uicon\\right.png");
-        settings = new Bitmap(L"uicon\\settings.png");
+        bcg = new Bitmap(L"..\\uicon\\bcg.png");
+        typing_bg = new Bitmap(L"..\\uicon\\typing_bg.png");
+        user = new Bitmap(L"..\\uicon\\user.png");
+        default_icon = new Bitmap(L"..\\uicon\\default.png");
+        eng = new Bitmap(L"..\\uicon\\ENG.png");
+        ipa = new Bitmap(L"..\\uicon\\IPA.png");
+        left = new Bitmap(L"..\\uicon\\left.png");
+        right = new Bitmap(L"..\\uicon\\right.png");
+        settings = new Bitmap(L"..\\uicon\\settings.png");
     }
 
     void UnloadAll() {
@@ -138,12 +138,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     switch (msg) {
     case WM_CREATE:
         {
-            g_backend.Init();
+            bool initOk = g_backend.Init();
+            if (!initOk) {
+                MessageBoxW(hwnd, L"Failed to load scheme files! Check console output.", L"ScrIPA Error", MB_OK | MB_ICONERROR);
+            }
+            g_backend.clearBuffer();  // 清空初始 buffer
             g_ui.modeIPA = g_backend.GetMode();  // sync with backend
             g_ui.composition = g_backend.GetComposition();
             g_ui.items = g_backend.GetCandidates();
+            // 不再使用假数据，如果没有候选就留空
             if (g_ui.items.empty()) {
-                g_ui.items = { L"tʃ", L"θ", L"ɡ", L"ŋ", L"ʃ", L"ð", L"æ", L"ɔ", L"ə" };
+                g_ui.items = { L"" };
             }
             g_ui.selected = 0;
             g_ui.pageIndex = 0;
@@ -153,13 +158,26 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 
     case WM_KEYDOWN:
+        // 大键盘数字键 1-9：用于选择候选项
+        if (wParam >= '1' && wParam <= '9') {
+            int num = (int)(wParam - '1');
+            int idx = g_ui.pageIndex * g_ui.itemsPerPage + num;
+            if (idx >= 0 && idx < (int)g_ui.items.size()) {
+                std::wstringstream ss;
+                ss << L"Selected #" << (idx + 1) << L": " << g_ui.items[idx];
+                MessageBoxW(hwnd, ss.str().c_str(), L"Scripa Demo", MB_OK);
+            }
+            return 0;  // 阻止生成 WM_CHAR
+        }
+        
         // Backspace in composition mode: clear last character
         if (wParam == VK_BACK) {
-            // This should be handled in WM_CHAR, but VK_BACK doesn't generate WM_CHAR
-            // So we handle it here: remove last char from composition via backend
-            // For now, just clear the whole buffer (can refine later)
-            g_ui.composition = L"";
-            g_ui.items.clear();
+            // Delete last character from buffer
+            g_backend.deleteLastChar();
+            // Update UI
+            g_ui.composition = g_backend.GetComposition();
+            g_ui.items = g_backend.GetCandidates();
+            g_ui.selected = 0;
             g_ui.pageIndex = 0;
             InvalidateRect(hwnd, NULL, TRUE);
             return 0;
@@ -192,6 +210,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_CHAR:
         {
             wchar_t ch = (wchar_t)wParam;
+            
+            // 忽略 backspace 字符，已在 WM_KEYDOWN 中处理
+            if (ch == 0x08) {
+                return 0;
+            }
+            
             // page navigation
             if (ch == L'[') {
                 if (g_ui.pageIndex > 0) g_ui.pageIndex--;
@@ -205,17 +229,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 return 0;
             }
 
-            // numeric quick-select for current page
-            if (ch >= L'1' && ch <= L'0' + g_ui.itemsPerPage) {
-                int num = (int)(ch - L'1');
-                int idx = g_ui.pageIndex * g_ui.itemsPerPage + num;
-                if (idx >= 0 && idx < (int)g_ui.items.size()) {
-                    std::wstringstream ss;
-                    ss << L"Selected #" << (idx + 1) << L": " << g_ui.items[idx];
-                    MessageBoxW(hwnd, ss.str().c_str(), L"Scripa Demo", MB_OK);
-                }
-                return 0;
-            }
+            // 小键盘数字会到达这里，作为普通字符输入
+            // 大键盘数字已在 WM_KEYDOWN 中被拦截，不会到达这里
 
             // forward character to backend and refresh UI
             bool handled = g_backend.OnKeyDown(ch);
@@ -491,7 +506,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
     HWND hwnd = CreateWindowExW(
         0,
         CLASS_NAME,
-        L"Scripa Candidate UI",
+        L"ScrIPA",
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT, 700, 180,
         NULL,
