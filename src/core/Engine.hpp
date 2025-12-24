@@ -27,8 +27,11 @@ public:
     std::vector<std::u32string> getCandidates() const; //获取当前候选栏内容
     std::u32string chooseCandidate(size_t index); //选择候选的某个
     std::string getBuffer() const { return buffer_; } //debug用的，返回buffer值
-    void clearBuffer() { buffer_.clear(); } //然后清空buffer
-    void deleteLastChar() { if (!buffer_.empty()) buffer_.pop_back(); } //删除最后一个字符
+    void clearBuffer() { buffer_.clear(); committed_.clear(); committed_length_ = 0; } //然后清空buffer
+    void deleteLastChar() { 
+        if (!buffer_.empty() && buffer_.size() > committed_length_) 
+            buffer_.pop_back(); 
+    } //删除最后一个字符
     Mode getMode() const { return mode_; } //debug用的，返回mode值
 
 
@@ -36,12 +39,14 @@ private:
     Dictionary* dict_;
     std::string buffer_;
     Mode mode_;
+    std::u32string committed_;  // Already confirmed part before current buffer
+    size_t committed_length_;   // Length of committed part in buffer_
     
     std::vector<std::u32string> getCandidatesImpl() const;  // Internal implementation
 };
 // 执行层
 inline Engine::Engine(Dictionary* dict)
-    : dict_(dict), mode_(Mode::IPA)
+    : dict_(dict), mode_(Mode::IPA), committed_length_(0)
 {
 }
 
@@ -51,6 +56,8 @@ inline void Engine::toggleMode() {
     else
         mode_ = Mode::IPA;
     buffer_.clear();
+    committed_.clear();
+    committed_length_ = 0;
 }
 
 inline bool Engine::inputChar(char c)
@@ -61,6 +68,15 @@ inline bool Engine::inputChar(char c)
     }
     if (c == ' ') {
         // 空格键：提交第一个候选
+        auto candidates = getCandidatesImpl();  // Get pure candidates without committed_
+        if (!candidates.empty()) {
+            committed_ += candidates[0];  // Add first candidate to committed
+            committed_ += U' ';  // Add space
+        } else if (!committed_.empty()) {
+            committed_ += U' ';  // Just add space if no new candidates
+        }
+        buffer_.push_back(' ');  // Keep space in buffer for display
+        committed_length_ = buffer_.size();  // Mark everything before this as committed
         return true;
     }
     buffer_.push_back(c);
@@ -76,10 +92,27 @@ inline std::vector<std::u32string> Engine::getCandidates() const
     if (!dict_)
         return {};
 
-    // Performance optimization for long input (>=10 chars)
-    if (buffer_.size() >= 10) {
-        // Create a temporary engine with first 9 chars
-        std::string prefix = buffer_.substr(0, 9);
+    // Get uncommitted part of buffer
+    std::string active_buffer = (committed_length_ < buffer_.size()) 
+                                 ? buffer_.substr(committed_length_) 
+                                 : "";
+
+    // If active buffer is empty, return committed as the only candidate
+    if (active_buffer.empty()) {
+        if (committed_.empty()) {
+            return {};
+        }
+        return {committed_};
+    }
+
+    // Performance optimization for long input
+    // Trigger at 11, 19, 27, ... (8n+3 chars)
+    if (active_buffer.size() >= 11) {
+        // Calculate prefix size: largest multiple of 8 that's <= buffer_size - 3
+        size_t prefix_size = ((active_buffer.size() - 3) / 8) * 8;
+        
+        // Create a temporary engine with first prefix_size chars
+        std::string prefix = active_buffer.substr(0, prefix_size);
         Engine temp_engine(dict_);
         temp_engine.buffer_ = prefix;
         temp_engine.mode_ = Mode::IPA;
@@ -87,28 +120,32 @@ inline std::vector<std::u32string> Engine::getCandidates() const
         auto prefix_candidates = temp_engine.getCandidatesImpl();
         if (prefix_candidates.empty()) {
             // Fallback to full search if prefix fails
-            return getCandidatesImpl();
+            auto full_candidates = getCandidatesImpl();
+            std::vector<std::u32string> result;
+            for (const auto& cand : full_candidates) {
+                result.push_back(committed_ + cand);
+            }
+            return result;
         }
         
         // Get the best candidate's segmentation info
-        // We need to find where the last segment ends
-        // For now, use a simple strategy: try to extend to char 10/11/12 if they form a valid segment
+        // Try to find optimal break point by checking if chars at prefix_size+1/+2/+3 could be part of same segment
+        // Continue extending as long as the segment is in dictionary
         
-        // Try to find optimal break point by checking if chars 9-12 could be part of same segment
-        size_t break_point = 9;
-        for (size_t extend = 10; extend <= std::min(buffer_.size(), size_t(12)); ++extend) {
-            std::string test_seg = buffer_.substr(break_point - 1, extend - break_point + 1);
+        size_t break_point = prefix_size;
+        for (size_t extend = prefix_size + 1; extend <= std::min(active_buffer.size(), prefix_size + 3); ++extend) {
+            std::string test_seg = active_buffer.substr(prefix_size - 1, extend - prefix_size + 1);
             auto lookup = dict_->Lookup(test_seg);
             if (!lookup.empty()) {
-                break_point = extend;  // Extend the break point
+                break_point = extend;  // Update to this valid segment, continue to check longer
             } else {
-                break;  // Stop extending
+                break;  // Not in dictionary, stop extending
             }
         }
         
         // Recursively process the remaining part
-        if (break_point < buffer_.size()) {
-            std::string suffix = buffer_.substr(break_point);
+        if (break_point < active_buffer.size()) {
+            std::string suffix = active_buffer.substr(break_point);
             Engine temp_suffix(dict_);
             temp_suffix.buffer_ = suffix;
             temp_suffix.mode_ = Mode::IPA;
@@ -117,14 +154,18 @@ inline std::vector<std::u32string> Engine::getCandidates() const
             // Combine prefix best candidate with suffix candidates
             std::vector<std::u32string> result;
             for (const auto& suffix_cand : suffix_candidates) {
-                result.push_back(prefix_candidates[0] + suffix_cand);
+                result.push_back(committed_ + prefix_candidates[0] + suffix_cand);
             }
             if (result.size() > 60) result.resize(60);
             return result;
         }
         
-        // If no suffix, just return prefix candidates
-        return prefix_candidates;
+        // If no suffix, just return prefix candidates with committed prefix
+        std::vector<std::u32string> result;
+        for (const auto& cand : prefix_candidates) {
+            result.push_back(committed_ + cand);
+        }
+        return result;
     }
 
     return getCandidatesImpl();
@@ -138,6 +179,11 @@ inline std::vector<std::u32string> Engine::getCandidatesImpl() const
 
     if (!dict_)
         return {};
+
+    // Get uncommitted part of buffer
+    std::string active_buffer = (committed_length_ < buffer_.size()) 
+                                 ? buffer_.substr(committed_length_) 
+                                 : "";
 
     // Helper: get digit count in T-pattern (e.g., T132 -> 3, T1 -> 1, not T-pattern -> 0)
     auto getT_digitCount = [](const std::string &buf) -> int {
@@ -157,12 +203,12 @@ inline std::vector<std::u32string> Engine::getCandidatesImpl() const
     auto countT_patternsInBuffer = [&]() -> int {
         int count = 0;
         size_t i = 0;
-        while (i < buffer_.size()) {
-            if (buffer_[i] == 'T' && i + 1 < buffer_.size() && buffer_[i+1] >= '1' && buffer_[i+1] <= '5') {
+        while (i < active_buffer.size()) {
+            if (active_buffer[i] == 'T' && i + 1 < active_buffer.size() && active_buffer[i+1] >= '1' && active_buffer[i+1] <= '5') {
                 count++;
                 i++;
-                while (i < buffer_.size() && buffer_[i] >= '1' && buffer_[i] <= '5') i++;
-                if (i < buffer_.size() && buffer_[i] == 'T') i++;
+                while (i < active_buffer.size() && active_buffer[i] >= '1' && active_buffer[i] <= '5') i++;
+                if (i < active_buffer.size() && active_buffer[i] == 'T') i++;
             } else {
                 i++;
             }
@@ -181,15 +227,15 @@ inline std::vector<std::u32string> Engine::getCandidatesImpl() const
 
     // exact match
     {
-        auto exact = dict_->Lookup(buffer_);
-        if (exact.empty() && !buffer_.empty()) {
-            exact.push_back(utf8_to_utf32(buffer_));
+        auto exact = dict_->Lookup(active_buffer);
+        if (exact.empty() && !active_buffer.empty()) {
+            exact.push_back(utf8_to_utf32(active_buffer));
         }
         
         for (const auto &e : exact) {
-            bool was_in_dict = (utf32_to_utf8(e) != buffer_);
-            int t_converted = (was_in_dict && getT_digitCount(buffer_) > 0) ? 1 : 0;
-            int t_digits = getT_digitCount(buffer_);
+            bool was_in_dict = (utf32_to_utf8(e) != active_buffer);
+            int t_converted = (was_in_dict && getT_digitCount(active_buffer) > 0) ? 1 : 0;
+            int t_digits = getT_digitCount(active_buffer);
             int num_segments = 1;  // exact match = 1 segment
             int total_converted = was_in_dict ? 1 : 0;
             collected.emplace_back(e, t_converted, t_digits, num_segments, total_converted, was_in_dict);
@@ -197,7 +243,7 @@ inline std::vector<std::u32string> Engine::getCandidatesImpl() const
     }
 
     // segmentation
-    size_t n = buffer_.size();
+    size_t n = active_buffer.size();
     if (n >= 2) {
         std::vector<std::string> parts;
         std::function<void(size_t)> dfs = [&](size_t pos) {
@@ -244,7 +290,7 @@ inline std::vector<std::u32string> Engine::getCandidatesImpl() const
                 return;
             }
             for (size_t len = 1; pos + len <= n; ++len) {
-                parts.push_back(buffer_.substr(pos, len));
+                parts.push_back(active_buffer.substr(pos, len));
                 dfs(pos + len);
                 parts.pop_back();
             }
@@ -309,7 +355,7 @@ inline std::vector<std::u32string> Engine::getCandidatesImpl() const
         return utf32_to_utf8(std::get<0>(a)) < utf32_to_utf8(std::get<0>(b));
     });
 
-    // build result vector
+    // build result vector (pure result without committed_)
     std::vector<std::u32string> result;
     result.reserve(out.size());
     for (auto &p : out) result.push_back(std::get<0>(p));
@@ -328,5 +374,7 @@ inline std::u32string  Engine::chooseCandidate(size_t index)
 
     std::u32string result = cand[index];
     buffer_.clear();
+    committed_.clear();  // Clear committed part after choosing
+    committed_length_ = 0;  // Reset committed length
     return result;
 }
