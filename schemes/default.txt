@@ -139,7 +139,7 @@ Dm ◌̼
 Dn ◌̪
 Du ◌̺
 Da ◌̻
-D+,Dchrist,Dhr  ◌̟
+D+,Dchr,Dhr  ◌̟
 D- ◌̠
 
 D, ◌̩
@@ -173,7 +173,7 @@ Psrh ʵ
 Prx，Pqxz ʶ
 Pw ʷ
 Py ʸ
-P' ʹ
+P'13 ʹ
 P' ˈ
 P'' ʺ
 Phq,Ph1 ˀ
