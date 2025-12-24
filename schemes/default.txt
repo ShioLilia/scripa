@@ -1,12 +1,12 @@
-m m
-p p
-b b
+//m m
+//p p
+//b b
 mv ɱ
-f f
-v v
-n n
-t t
-d d
+//f f
+//v v
+//n n
+//t t
+//d d
 trn ɳ
 tr ʈ
 dr ɖ
@@ -14,13 +14,13 @@ tx ȶ
 dx ȡ
 nx ȵ
 cn ɲ
-c c
+//c c
 cz ɟ
 gn ŋ
-k k
-g g
+//k k
+//g g
 qn ɴ
-q q
+//q q
 qg,qz ɢ
 hk,h3 ʡ
 hq,h1 ʔ
@@ -29,8 +29,8 @@ fw ɸ
 vw,bw β
 td θ
 dd ð
-s s
-z z
+//s s
+//z z
 sh ʃ
 zh ʒ
 sr ʂ
@@ -39,15 +39,16 @@ cx,sx ɕ
 zx ʑ
 cc,cs ç
 jx,jc ʝ
-j j
-x x
+//j j
+//x x
 xz,gx ɣ
+jh,jy ɥ
 wh ɰ
 qx χ
 rx,qxz ʁ
 h2p,hkx ħ
 hqx,hkxz,h2pz,h2 ʕ
-h h
+//h h
 hz,hc ɦ
 
 vh ʋ
@@ -57,14 +58,14 @@ rl ɾ
 srh ɻ
 srl ɽ
 bv ʙ
-r r
+//r r
 qr ʀ
 hr ʜ
 hrz ʢ
 
 ls ɬ
 lz ɮ
-l l
+//l l
 ll ɺ
 lr ɭ
 lrl ɭ̆
@@ -86,20 +87,20 @@ trC 𝼊
 cC ǂ
 xC ʞ
 
-a a
+//a a
 ae æ
 ea ɛ
 eDp e̞
-e e
+//e e
 ei ɪ
-i i
+//i i
 
 oa ɶ
 oe,oea œ
 eoDp ø̞
 eo,oe ø
 ey ʏ
-y y
+//y y
 
 ac,aQ.. ä
 aec ɐ
@@ -125,9 +126,9 @@ ib,ub ɯ
 oab,ob ɒ
 oo ɔ
 oDp o̞
-o o
+//o o
 ub ʊ
-u u
+//u u
 
 D~ ◌̰
 ~,Q~,Qnn ◌̃
