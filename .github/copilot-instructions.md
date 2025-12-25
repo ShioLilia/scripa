@@ -42,5 +42,5 @@
 
 cl /std:c++17 /utf-8 /EHsc /W4 /Zi /Fe:..\build\206.exe ..\src\ui\candidate_demo.cpp /link gdiplus.lib user32.lib gdi32.lib shell32.lib
 
-cl /std:c++17 /utf-8 /EHsc /W4 /Zi /Fe:..\build\316.exe ..\src\ui\candidate_demo.cpp ..\src\tsf\ScripaTSF.cpp /link gdiplus.lib user32.lib gdi32.lib shell32.lib
+cl /std:c++17 /utf-8 /EHsc /W4 /Zi /Fe:..\build\326.exe ..\src\ui\candidate_demo.cpp ..\src\tsf\ScripaTSF.cpp ..\src\ui\candidate_demo.res /link gdiplus.lib user32.lib gdi32.lib shell32.lib
 

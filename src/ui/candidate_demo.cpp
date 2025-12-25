@@ -1,3 +1,9 @@
+#ifndef UNICODE
+#define UNICODE
+#endif
+#ifndef _UNICODE
+#define _UNICODE
+#endif
 
 #include <windows.h>
 #include <vector>
@@ -12,6 +18,7 @@
 #include <shellapi.h>
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "shell32.lib")
+
 
 using namespace Gdiplus;
 
@@ -261,7 +268,7 @@ void ShowSchemeSelectionDialog(HWND hwndParent) {
         L"SchemeSelectionDialog",
         L"Choose Schemes",
         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
-        CW_USEDEFAULT, CW_USEDEFAULT, 380, 300,
+        CW_USEDEFAULT, CW_USEDEFAULT, -280, -40,
         hwndParent,
         NULL,
         GetModuleHandle(NULL),
@@ -497,10 +504,10 @@ LRESULT CALLBACK SettingsMenuProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
             // Handle menu action
             switch (menuId) {
             case 1: // Other Settings
-                MessageBoxW(g_hwndParentMain, L"Other Settings (TBD)", L"Scripa", MB_OK);
+                MessageBoxW(g_hwndParentMain, L"Other Settings (TBD)", L"ScrIPA", MB_OK);
                 break;
             case 2: // Change Theme
-                MessageBoxW(g_hwndParentMain, L"Change Theme (TBD)", L"Scripa", MB_OK);
+                MessageBoxW(g_hwndParentMain, L"Change Theme (TBD)", L"ScrIPA", MB_OK);
                 break;
             case 3: // Choose Schemes
                 ShowSchemeSelectionDialog(g_hwndParentMain);
@@ -569,7 +576,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 if (CopyToClipboard(hwnd, selectedText)) {
                     std::wstringstream ss;
                     // ss << L"Selected #" << (idx + 1) << L": " << g_ui.items[idx];
-                    // MessageBoxW(hwnd, ss.str().c_str(), L"Scripa Demo", MB_OK);
+                    // MessageBoxW(hwnd, ss.str().c_str(), L"ScrIPA Demo", MB_OK);
                     ss << L"Selected & Copied:\n" << selectedText;
                     MessageBoxW(hwnd, ss.str().c_str(), L"ScrIPA", MB_OK | MB_ICONINFORMATION);
                 } else {
@@ -617,7 +624,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 if (CopyToClipboard(hwnd, selectedText)) {
                     std::wstringstream ss;
                     // ss << L"Selected #" << (idx + 1) << L": " << g_ui.items[idx];
-                    // MessageBoxW(hwnd, ss.str().c_str(), L"Scripa Demo", MB_OK);
+                    // MessageBoxW(hwnd, ss.str().c_str(), L"ScrIPA Demo", MB_OK);
                     ss << L"Selected & Copied:\n" << selectedText;
                     MessageBoxW(hwnd, ss.str().c_str(), L"ScrIPA", MB_OK | MB_ICONINFORMATION);
                 } else {
@@ -717,11 +724,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     if (IsWindowVisible(g_hwndSchemeReference)) {
                         ShowWindow(g_hwndSchemeReference, SW_HIDE);
                     } else {
-                        // Position to the left of main window
+                        // Position below main window
                         RECT rcMain;
                         GetWindowRect(hwnd, &rcMain);
                         SetWindowPos(g_hwndSchemeReference, HWND_TOPMOST,
-                                     rcMain.left - 360, rcMain.top,
+                                     rcMain.left, rcMain.bottom,
                                      0, 0, SWP_NOSIZE | SWP_SHOWWINDOW);
                     }
                 }
@@ -1030,7 +1037,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
         CLASS_NAME,
         L"ScrIPA",
         WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, 700, 180,
+        CW_USEDEFAULT, CW_USEDEFAULT, 700, 170,
         NULL,
         NULL,
         hInstance,
