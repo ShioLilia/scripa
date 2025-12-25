@@ -28,6 +28,11 @@ struct IconSet {
     Bitmap* left = nullptr;
     Bitmap* right = nullptr;
     Bitmap* settings = nullptr;
+    // Settings menu icons (16x16)
+    Bitmap* icon_else = nullptr;
+    Bitmap* icon_skin = nullptr;
+    Bitmap* icon_choosefile = nullptr;
+    Bitmap* icon_custom = nullptr;
 
     void LoadAll() {
         bcg = new Bitmap(L"..\\uicon\\bcg.png");
@@ -39,6 +44,11 @@ struct IconSet {
         left = new Bitmap(L"..\\uicon\\left.png");
         right = new Bitmap(L"..\\uicon\\right.png");
         settings = new Bitmap(L"..\\uicon\\settings.png");
+        // Load menu icons
+        icon_else = new Bitmap(L"..\\uicon\\else.png");
+        icon_skin = new Bitmap(L"..\\uicon\\skin.png");
+        icon_choosefile = new Bitmap(L"..\\uicon\\choosefile.png");
+        icon_custom = new Bitmap(L"..\\uicon\\custom.png");
     }
 
     void UnloadAll() {
@@ -51,6 +61,11 @@ struct IconSet {
         if (left) { delete left; left = nullptr; }
         if (right) { delete right; right = nullptr; }
         if (settings) { delete settings; settings = nullptr; }
+        // Unload menu icons
+        if (icon_else) { delete icon_else; icon_else = nullptr; }
+        if (icon_skin) { delete icon_skin; icon_skin = nullptr; }
+        if (icon_choosefile) { delete icon_choosefile; icon_choosefile = nullptr; }
+        if (icon_custom) { delete icon_custom; icon_custom = nullptr; }
     }
 };
 
@@ -103,60 +118,421 @@ RECT g_btnLeft = {0, 0, 0, 0};
 RECT g_btnRight = {0, 0, 0, 0};
 RECT g_btnSettings = {0, 0, 0, 0};
 
-// 字库选择对话框
-void ShowSchemeSelectionDialog(HWND hwndParent) {
-    // 获取所有可用字库
-    auto available = g_backend.GetAvailableSchemes();
+// Settings menu popup window
+static HWND g_hwndSettingsMenu = NULL;
+static HWND g_hwndParentMain = NULL;
+
+// Scheme reference popup window
+static HWND g_hwndSchemeReference = NULL;
+
+struct SettingsMenuItem {
+    std::wstring text;
+    Bitmap* icon;
+    int id;
+};
+
+static std::vector<SettingsMenuItem> g_menuItems;
+
+// Scheme selection dialog with checkboxes
+static std::vector<std::string> g_schemeFiles;
+static std::vector<HWND> g_schemeCheckboxes;
+
+LRESULT CALLBACK SchemeSelectionDlgProc(HWND hwndDlg, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    switch (msg) {
+    case WM_INITDIALOG:
+    {
+        // Get available schemes
+        g_schemeFiles = g_backend.GetAvailableSchemes();
+        g_schemeCheckboxes.clear();
+        
+        // Create checkboxes for each scheme
+        int yPos = 15;
+        for (size_t i = 0; i < g_schemeFiles.size(); ++i) {
+            bool enabled = g_backend.IsSchemeEnabled(g_schemeFiles[i]);
+            
+            // Convert scheme name to wstring
+            std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
+            std::wstring schemeName = conv.from_bytes(g_schemeFiles[i]);
+            
+            // Create checkbox
+            HWND hwndCheck = CreateWindowW(
+                L"BUTTON",
+                schemeName.c_str(),
+                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                20, yPos, 320, 20,
+                hwndDlg,
+                (HMENU)(INT_PTR)(1000 + i),
+                GetModuleHandle(NULL),
+                NULL
+            );
+            
+            // Set checkbox state
+            SendMessage(hwndCheck, BM_SETCHECK, enabled ? BST_CHECKED : BST_UNCHECKED, 0);
+            g_schemeCheckboxes.push_back(hwndCheck);
+            
+            yPos += 25;
+        }
+        
+        // Create Apply and Cancel buttons
+        CreateWindowW(
+            L"BUTTON",
+            L"Apply",
+            WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+            80, yPos + 15, 80, 30,
+            hwndDlg,
+            (HMENU)IDOK,
+            GetModuleHandle(NULL),
+            NULL
+        );
+        
+        CreateWindowW(
+            L"BUTTON",
+            L"Cancel",
+            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+            180, yPos + 15, 80, 30,
+            hwndDlg,
+            (HMENU)IDCANCEL,
+            GetModuleHandle(NULL),
+            NULL
+        );
+        
+        // Resize dialog based on number of schemes
+        int dialogHeight = yPos + 80;  // Increased for button visibility
+        SetWindowPos(hwndDlg, NULL, 0, 0, 380, dialogHeight, SWP_NOMOVE | SWP_NOZORDER);
+        
+        return 0;
+    }
     
-    if (available.empty()) {
-        MessageBoxW(hwndParent, L"No scheme files found in schemes/ directory.", L"Scheme Selection", MB_OK | MB_ICONINFORMATION);
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK) {
+            // Apply changes
+            for (size_t i = 0; i < g_schemeCheckboxes.size(); ++i) {
+                LRESULT checked = SendMessage(g_schemeCheckboxes[i], BM_GETCHECK, 0, 0);
+                bool shouldEnable = (checked == BST_CHECKED);
+                bool currentlyEnabled = g_backend.IsSchemeEnabled(g_schemeFiles[i]);
+                
+                if (shouldEnable && !currentlyEnabled) {
+                    g_backend.EnableScheme(g_schemeFiles[i]);
+                } else if (!shouldEnable && currentlyEnabled) {
+                    g_backend.DisableScheme(g_schemeFiles[i]);
+                }
+            }
+            
+            // Reload dictionary with new scheme selection
+            g_backend.ReloadSchemes();
+            
+            g_schemeCheckboxes.clear();
+            DestroyWindow(hwndDlg);
+            return 0;
+        } else if (LOWORD(wParam) == IDCANCEL) {
+            g_schemeCheckboxes.clear();
+            DestroyWindow(hwndDlg);
+            return 0;
+        }
+        break;
+    
+    case WM_CLOSE:
+        g_schemeCheckboxes.clear();
+        DestroyWindow(hwndDlg);
+        return 0;
+    }
+    
+    return DefWindowProcW(hwndDlg, msg, wParam, lParam);
+}
+
+void ShowSchemeSelectionDialog(HWND hwndParent) {
+    // Create dialog window class if not exists
+    static bool registered = false;
+    if (!registered) {
+        WNDCLASSW wc = {};
+        wc.lpfnWndProc = SchemeSelectionDlgProc;  // Use our custom dialog proc
+        wc.hInstance = GetModuleHandle(NULL);
+        wc.lpszClassName = L"SchemeSelectionDialog";
+        wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
+        wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+        RegisterClassW(&wc);
+        registered = true;
+    }
+    
+    // Create dialog
+    HWND hwndDlg = CreateWindowExW(
+        WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
+        L"SchemeSelectionDialog",
+        L"Choose Schemes",
+        WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
+        CW_USEDEFAULT, CW_USEDEFAULT, 380, 300,
+        hwndParent,
+        NULL,
+        GetModuleHandle(NULL),
+        NULL
+    );
+    
+    if (!hwndDlg) {
+        MessageBoxW(hwndParent, L"Failed to create dialog window", L"Error", MB_OK | MB_ICONERROR);
         return;
     }
     
-    // 构建消息文本
-    std::wstring msg = L"Available Schemes (check to enable):\n\n";
-    for (size_t i = 0; i < available.size(); ++i) {
-        bool enabled = g_backend.IsSchemeEnabled(available[i]);
-        msg += std::to_wstring(i + 1) + L". ";
-        msg += enabled ? L"[✓] " : L"[ ] ";
-        
-        // 转换为 wstring
-        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
-        msg += conv.from_bytes(available[i]) + L"\n";
-    }
+    // Center dialog on parent
+    RECT rcParent, rcDlg;
+    GetWindowRect(hwndParent, &rcParent);
+    GetWindowRect(hwndDlg, &rcDlg);
+    int x = rcParent.left + (rcParent.right - rcParent.left - (rcDlg.right - rcDlg.left)) / 2;
+    int y = rcParent.top + (rcParent.bottom - rcParent.top - (rcDlg.bottom - rcDlg.top)) / 2;
+    SetWindowPos(hwndDlg, NULL, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
     
-    msg += L"\nCurrently Enabled: ";
-    auto enabled_list = g_backend.GetEnabledSchemes();
-    if (enabled_list.empty()) {
-        msg += L"None";
-    } else {
-        for (size_t i = 0; i < enabled_list.size(); ++i) {
-            if (i > 0) msg += L", ";
-            std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
-            msg += conv.from_bytes(enabled_list[i]);
+    // Manually trigger initialization (since WM_CREATE doesn't handle WM_INITDIALOG)
+    SchemeSelectionDlgProc(hwndDlg, WM_INITDIALOG, 0, 0);
+    
+    // Disable parent window
+    EnableWindow(hwndParent, FALSE);
+    
+    // Modal message loop
+    MSG msg;
+    BOOL bRet;
+    while ((bRet = GetMessage(&msg, NULL, 0, 0)) != 0) {
+        if (bRet == -1) {
+            break;
+        }
+        
+        if (!IsWindow(hwndDlg)) {
+            break;
+        }
+        
+        if (msg.hwnd == hwndDlg || IsChild(hwndDlg, msg.hwnd)) {
+            if (msg.message == WM_KEYDOWN && msg.wParam == VK_ESCAPE) {
+                SendMessage(hwndDlg, WM_COMMAND, IDCANCEL, 0);
+                continue;
+            }
+            if (msg.message == WM_KEYDOWN && msg.wParam == VK_RETURN) {
+                SendMessage(hwndDlg, WM_COMMAND, IDOK, 0);
+                continue;
+            }
+            
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        } else {
+            // Dispatch messages for other windows
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
         }
     }
     
-    msg += L"\n\nEnter scheme number to toggle, or 'R' to reload schemes:";
+    // Re-enable parent window
+    EnableWindow(hwndParent, TRUE);
+    SetForegroundWindow(hwndParent);
     
-    // 显示输入框（简化版，实际应该用对话框）
-    // 这里使用简单的 MessageBox 作为演示
-    int result = MessageBoxW(hwndParent, msg.c_str(), L"Scheme Selection - Settings", 
-                             MB_OKCANCEL | MB_ICONINFORMATION);
-    
-    if (result == IDOK) {
-        // 实际项目中应该使用自定义对话框
-        // 这里只是演示，暂时弹窗说明功能已集成
-        MessageBoxW(hwndParent, 
-            L"Scheme selection UI integrated!\n\n"
-            L"To toggle schemes:\n"
-            L"1. Use g_backend.EnableScheme(\"custom\")\n"
-            L"2. Use g_backend.DisableScheme(\"simple\")\n"
-            L"3. Call g_backend.ReloadSchemes()\n\n"
-            L"Full UI dialog can be implemented with custom window + checkboxes.",
-            L"Info", MB_OK);
+    if (IsWindow(hwndDlg)) {
+        DestroyWindow(hwndDlg);
     }
 }
+
+// Scheme Reference popup window procedure
+LRESULT CALLBACK SchemeReferenceWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    switch (msg) {
+    case WM_CREATE:
+        return 0;
+    
+    case WM_PAINT:
+    {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+        
+        Graphics g(hdc);
+        g.SetSmoothingMode(SmoothingModeAntiAlias);
+        g.SetTextRenderingHint(TextRenderingHintAntiAlias);
+        
+        // Background
+        SolidBrush bgBrush(Color(255, 250, 250, 250));
+        g.FillRectangle(&bgBrush, 0, 0, rc.right, rc.bottom);
+        
+        // Title
+        SolidBrush titleBrush(Color(255, 60, 60, 60));
+        Gdiplus::Font titleFont(L"Segoe UI Semibold", 16);
+        StringFormat centerFormat;
+        centerFormat.SetAlignment(StringAlignmentCenter);
+        centerFormat.SetLineAlignment(StringAlignmentNear);
+        
+        RectF titleRect(10.0f, 20.0f, (float)rc.right - 20, 40.0f);
+        g.DrawString(L"Scheme Reference", -1, &titleFont, titleRect, &centerFormat, &titleBrush);
+        
+        // Placeholder content
+        SolidBrush textBrush(Color(255, 100, 100, 100));
+        Gdiplus::Font textFont(L"Segoe UI", 11);
+        StringFormat leftFormat;
+        leftFormat.SetAlignment(StringAlignmentNear);
+        leftFormat.SetLineAlignment(StringAlignmentNear);
+        
+        RectF contentRect(20.0f, 80.0f, (float)rc.right - 40, (float)rc.bottom - 100);
+        std::wstring content = 
+            L"IPA Input Scheme Reference\\n\\n"
+            L"[Image/Chart Placeholder]\\n\\n"
+            L"This window displays:\\n"
+            L"  • Character mappings\\n"
+            L"  • Key combinations\\n"
+            L"  • Tone markers (T1-T5)\\n"
+            L"  • Special symbols\\n\\n"
+            L"Future: Load reference image from\\n"
+            L"  uicon\\\\scheme_reference.png\\n\\n"
+            L"This window does not block\\n"
+            L"the main input window.";
+        g.DrawString(content.c_str(), -1, &textFont, contentRect, &leftFormat, &textBrush);
+        
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    
+    case WM_CLOSE:
+        ShowWindow(hwnd, SW_HIDE);
+        return 0;
+    
+    case WM_DESTROY:
+        return 0;
+    }
+    
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+// Settings menu window procedure
+LRESULT CALLBACK SettingsMenuProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    switch (msg) {
+    case WM_CREATE:
+        g_menuItems.clear();
+        g_menuItems.push_back({L"Other Settings", g_icons.icon_else, 1});
+        g_menuItems.push_back({L"Change Theme", g_icons.icon_skin, 2});
+        g_menuItems.push_back({L"Choose Schemes", g_icons.icon_choosefile, 3});
+        g_menuItems.push_back({L"Custom Dictionary", g_icons.icon_custom, 4});
+        return 0;
+
+    case WM_PAINT:
+    {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+        
+        Graphics g(hdc);
+        g.SetSmoothingMode(SmoothingModeAntiAlias);
+        g.SetTextRenderingHint(TextRenderingHintAntiAlias);
+        
+        // Background
+        SolidBrush bgBrush(Color(255, 245, 245, 245));
+        g.FillRectangle(&bgBrush, 0, 0, 200, (int)g_menuItems.size() * 32);
+        
+        // Draw menu items
+        SolidBrush textBrush(Color(255, 50, 50, 50));
+        Gdiplus::Font font(L"Segoe UI", 10);
+        StringFormat format;
+        format.SetAlignment(StringAlignmentNear);
+        format.SetLineAlignment(StringAlignmentCenter);
+        
+        POINT pt;
+        GetCursorPos(&pt);
+        ScreenToClient(hwnd, &pt);
+        
+        for (size_t i = 0; i < g_menuItems.size(); i++) {
+            int y = (int)i * 32;
+            RECT itemRect = {0, y, 200, y + 32};
+            
+            // Hover effect
+            if (PtInRect(&itemRect, pt)) {
+                SolidBrush hoverBrush(Color(255, 220, 220, 220));
+                g.FillRectangle(&hoverBrush, 0, y, 200, 32);
+            }
+            
+            // Draw icon (16x16)
+            if (g_menuItems[i].icon && g_menuItems[i].icon->GetLastStatus() == Ok) {
+                g.DrawImage(g_menuItems[i].icon, 8, y + 8, 16, 16);
+            }
+            
+            // Draw text
+            RectF textRect(32.0f, (float)y, 168.0f, 32.0f);
+            g.DrawString(g_menuItems[i].text.c_str(), -1, &font, textRect, &format, &textBrush);
+        }
+        
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+
+    case WM_MOUSEMOVE:
+    {
+        static POINT lastPt = {-1, -1};
+        POINT pt = {LOWORD(lParam), HIWORD(lParam)};
+        
+        // Only invalidate if mouse moved to different menu item
+        int oldItem = lastPt.y / 32;
+        int newItem = pt.y / 32;
+        if (oldItem != newItem) {
+            InvalidateRect(hwnd, NULL, FALSE);
+            lastPt = pt;
+        }
+        
+        // Track mouse leave
+        TRACKMOUSEEVENT tme = {};
+        tme.cbSize = sizeof(tme);
+        tme.dwFlags = TME_LEAVE;
+        tme.hwndTrack = hwnd;
+        TrackMouseEvent(&tme);
+        return 0;
+    }
+
+    case WM_MOUSELEAVE:
+        InvalidateRect(hwnd, NULL, FALSE);
+        return 0;
+
+    case WM_LBUTTONDOWN:
+    {
+        int x = LOWORD(lParam);
+        int y = HIWORD(lParam);
+        int itemIndex = y / 32;
+        
+        if (itemIndex >= 0 && itemIndex < (int)g_menuItems.size()) {
+            int menuId = g_menuItems[itemIndex].id;
+            
+            // Close menu
+            ShowWindow(hwnd, SW_HIDE);
+            
+            // Handle menu action
+            switch (menuId) {
+            case 1: // Other Settings
+                MessageBoxW(g_hwndParentMain, L"Other Settings (TBD)", L"Scripa", MB_OK);
+                break;
+            case 2: // Change Theme
+                MessageBoxW(g_hwndParentMain, L"Change Theme (TBD)", L"Scripa", MB_OK);
+                break;
+            case 3: // Choose Schemes
+                ShowSchemeSelectionDialog(g_hwndParentMain);
+                break;
+            case 4: // Custom Dictionary
+            {
+                // Open custom.txt with notepad
+                std::wstring customPath = L"..\\schemes\\custom.txt";
+                ShellExecuteW(NULL, L"open", L"notepad.exe", customPath.c_str(), NULL, SW_SHOW);
+                break;
+            }
+            }
+        }
+        return 0;
+    }
+
+    case WM_KILLFOCUS:
+    case WM_ACTIVATE:
+        if (wParam == WA_INACTIVE) {
+            ShowWindow(hwnd, SW_HIDE);
+        }
+        return 0;
+
+    case WM_DESTROY:
+        g_menuItems.clear();
+        return 0;
+    }
+    
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -311,7 +687,44 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             // check toolbar buttons
             if (PtInRect(&g_btnDefault, POINT{x, y})) {
-                ShellExecuteW(NULL, L"open", L"uicon\\..\\schemes\\default.txt", NULL, NULL, SW_SHOW);
+                // Toggle scheme reference window
+                if (!g_hwndSchemeReference) {
+                    // Register window class
+                    WNDCLASSW wcRef = {};
+                    wcRef.lpfnWndProc = SchemeReferenceWndProc;
+                    wcRef.hInstance = GetModuleHandle(NULL);
+                    wcRef.lpszClassName = L"SchemeReferenceWindow";
+                    wcRef.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+                    wcRef.hCursor = LoadCursor(NULL, IDC_ARROW);
+                    RegisterClassW(&wcRef);
+                    
+                    // Create window
+                    g_hwndSchemeReference = CreateWindowExW(
+                        WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+                        L"SchemeReferenceWindow",
+                        L"Scheme Reference",
+                        WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME,
+                        CW_USEDEFAULT, CW_USEDEFAULT, 350, 500,
+                        NULL,  // No parent, independent window
+                        NULL,
+                        GetModuleHandle(NULL),
+                        NULL
+                    );
+                }
+                
+                if (g_hwndSchemeReference) {
+                    // Toggle visibility
+                    if (IsWindowVisible(g_hwndSchemeReference)) {
+                        ShowWindow(g_hwndSchemeReference, SW_HIDE);
+                    } else {
+                        // Position to the left of main window
+                        RECT rcMain;
+                        GetWindowRect(hwnd, &rcMain);
+                        SetWindowPos(g_hwndSchemeReference, HWND_TOPMOST,
+                                     rcMain.left - 360, rcMain.top,
+                                     0, 0, SWP_NOSIZE | SWP_SHOWWINDOW);
+                    }
+                }
                 return 0;
             }
             if (PtInRect(&g_btnUser, POINT{x, y})) {
@@ -344,8 +757,36 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 return 0;
             }
             if (PtInRect(&g_btnSettings, POINT{x, y})) {
-                // 显示字库选择对话框
-                ShowSchemeSelectionDialog(hwnd);
+                // Show settings dropdown menu
+                if (!g_hwndSettingsMenu) {
+                    // Create menu window on first use
+                    WNDCLASSW wcMenu = {};
+                    wcMenu.lpfnWndProc = SettingsMenuProc;
+                    wcMenu.hInstance = GetModuleHandle(NULL);
+                    wcMenu.lpszClassName = L"ScripaSettingsMenu";
+                    wcMenu.hCursor = LoadCursor(NULL, IDC_ARROW);
+                    RegisterClassW(&wcMenu);
+                    
+                    g_hwndSettingsMenu = CreateWindowExW(
+                        WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+                        L"ScripaSettingsMenu",
+                        L"",
+                        WS_POPUP | WS_BORDER,
+                        0, 0, 200, 128,  // 4 items * 32px height
+                        hwnd,
+                        NULL,
+                        GetModuleHandle(NULL),
+                        NULL
+                    );
+                    g_hwndParentMain = hwnd;
+                }
+                
+                // Position menu below settings button
+                POINT pt = {g_btnSettings.left, g_btnSettings.bottom};
+                ClientToScreen(hwnd, &pt);
+                SetWindowPos(g_hwndSettingsMenu, HWND_TOPMOST, pt.x, pt.y, 0, 0, SWP_NOSIZE | SWP_SHOWWINDOW);
+                SetFocus(g_hwndSettingsMenu);
+                
                 return 0;
             }
 
@@ -552,6 +993,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
 
     case WM_DESTROY:
+        if (g_hwndSettingsMenu) {
+            DestroyWindow(g_hwndSettingsMenu);
+            g_hwndSettingsMenu = NULL;
+        }
+        if (g_hwndSchemeReference) {
+            DestroyWindow(g_hwndSchemeReference);
+            g_hwndSchemeReference = NULL;
+        }
         PostQuitMessage(0);
         return 0;
     }
