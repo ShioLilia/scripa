@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <locale>
 #include <codecvt>
+#include <map>
 #include "../tsf/ScripaTSF.h"
 #include "../core/Dic.hpp"
 #include <gdiplus.h>
@@ -132,6 +133,34 @@ static HWND g_hwndParentMain = NULL;
 // Scheme reference popup window
 static HWND g_hwndSchemeReference = NULL;
 
+// Scheme reference images
+struct SchemeReferenceData {
+    Bitmap* cons1 = nullptr;
+    Bitmap* cons2 = nullptr;
+    Bitmap* cons3 = nullptr;
+    Bitmap* vowel = nullptr;
+    Bitmap* elseAndTones = nullptr;
+    int currentView = 0;  // 0=C1, 1=C2(both cons2&cons3), 2=V, 3=Else
+    
+    void LoadAll() {
+        cons1 = new Bitmap(L"..\\src\\dictionary\\cons1.png");
+        cons2 = new Bitmap(L"..\\src\\dictionary\\cons2.png");
+        cons3 = new Bitmap(L"..\\src\\dictionary\\cons3.png");
+        vowel = new Bitmap(L"..\\src\\dictionary\\vowel.png");
+        elseAndTones = new Bitmap(L"..\\src\\dictionary\\else and tones.png");
+    }
+    
+    void UnloadAll() {
+        if (cons1) { delete cons1; cons1 = nullptr; }
+        if (cons2) { delete cons2; cons2 = nullptr; }
+        if (cons3) { delete cons3; cons3 = nullptr; }
+        if (vowel) { delete vowel; vowel = nullptr; }
+        if (elseAndTones) { delete elseAndTones; elseAndTones = nullptr; }
+    }
+};
+
+static SchemeReferenceData g_schemeRefData;
+
 struct SettingsMenuItem {
     std::wstring text;
     Bitmap* icon;
@@ -141,106 +170,328 @@ struct SettingsMenuItem {
 static std::vector<SettingsMenuItem> g_menuItems;
 
 // Scheme selection dialog with checkboxes
-static std::vector<std::string> g_schemeFiles;
-static std::vector<HWND> g_schemeCheckboxes;
+struct SchemeGroup {
+    std::string name;
+    std::vector<std::string> schemes;
+    bool expanded = true;
+    HWND checkboxGroup = NULL;
+    HWND buttonExpand = NULL;
+    std::vector<HWND> checkboxes;
+};
+
+static std::vector<SchemeGroup> g_schemeGroups;
+static std::vector<std::string> g_standaloneSchemes;  // custom等独立scheme
 
 LRESULT CALLBACK SchemeSelectionDlgProc(HWND hwndDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg) {
     case WM_INITDIALOG:
     {
-        // Get available schemes
-        g_schemeFiles = g_backend.GetAvailableSchemes();
-        g_schemeCheckboxes.clear();
+        // Get all available schemes
+        auto allSchemes = g_backend.GetAvailableSchemes();
         
-        // Create checkboxes for each scheme
+        // Clear and rebuild groups
+        g_schemeGroups.clear();
+        g_standaloneSchemes.clear();
+        
+        // Define groups
+        SchemeGroup defaultGroup;
+        defaultGroup.name = "default";
+        
+        SchemeGroup specializedGroup;
+        specializedGroup.name = "specialized";
+        
+        // Categorize schemes
+        for (const auto& scheme : allSchemes) {
+            if (scheme == "default" || scheme == "simple" || scheme == "tones") {
+                defaultGroup.schemes.push_back(scheme);
+            } else if (scheme == "chinese") {
+                specializedGroup.schemes.push_back(scheme);
+            } else if (scheme == "custom") {
+                g_standaloneSchemes.push_back(scheme);
+            } else {
+                // Unknown schemes go to specialized
+                specializedGroup.schemes.push_back(scheme);
+            }
+        }
+        
+        if (!defaultGroup.schemes.empty()) g_schemeGroups.push_back(defaultGroup);
+        if (!specializedGroup.schemes.empty()) g_schemeGroups.push_back(specializedGroup);
+        
+        // Create UI
         int yPos = 15;
-        for (size_t i = 0; i < g_schemeFiles.size(); ++i) {
-            bool enabled = g_backend.IsSchemeEnabled(g_schemeFiles[i]);
+        int xStart = 20;
+        int groupCheckW = 320;
+        int itemCheckW = 300;
+        int btnW = 30;
+        
+        // Create group controls
+        for (size_t gi = 0; gi < g_schemeGroups.size(); ++gi) {
+            auto& group = g_schemeGroups[gi];
             
-            // Convert scheme name to wstring
+            // Group checkbox
             std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
-            std::wstring schemeName = conv.from_bytes(g_schemeFiles[i]);
+            std::wstring groupName = conv.from_bytes(group.name);
             
-            // Create checkbox
-            HWND hwndCheck = CreateWindowW(
-                L"BUTTON",
-                schemeName.c_str(),
+            group.checkboxGroup = CreateWindowW(
+                L"BUTTON", groupName.c_str(),
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                20, yPos, 320, 20,
-                hwndDlg,
-                (HMENU)(INT_PTR)(1000 + i),
-                GetModuleHandle(NULL),
-                NULL
+                xStart, yPos, groupCheckW, 20,
+                hwndDlg, (HMENU)(INT_PTR)(2000 + gi),
+                GetModuleHandle(NULL), NULL
             );
             
-            // Set checkbox state
-            SendMessage(hwndCheck, BM_SETCHECK, enabled ? BST_CHECKED : BST_UNCHECKED, 0);
-            g_schemeCheckboxes.push_back(hwndCheck);
+            // Expand/Collapse button
+            group.buttonExpand = CreateWindowW(
+                L"BUTTON", group.expanded ? L"-" : L"+",
+                WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                xStart + groupCheckW + 5, yPos - 2, btnW, 24,
+                hwndDlg, (HMENU)(INT_PTR)(3000 + gi),
+                GetModuleHandle(NULL), NULL
+            );
             
+            // Check if all schemes in group are enabled
+            bool allEnabled = true;
+            for (const auto& scheme : group.schemes) {
+                if (!g_backend.IsSchemeEnabled(scheme)) {
+                    allEnabled = false;
+                    break;
+                }
+            }
+            SendMessage(group.checkboxGroup, BM_SETCHECK, allEnabled ? BST_CHECKED : BST_UNCHECKED, 0);
+            
+            yPos += 25;
+            
+            // Child scheme checkboxes
+            if (group.expanded) {
+                for (size_t i = 0; i < group.schemes.size(); ++i) {
+                    bool enabled = g_backend.IsSchemeEnabled(group.schemes[i]);
+                    std::wstring schemeName = conv.from_bytes(group.schemes[i]);
+                    
+                    HWND hwndCheck = CreateWindowW(
+                        L"BUTTON", schemeName.c_str(),
+                        WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                        xStart + 20, yPos, itemCheckW, 20,
+                        hwndDlg, (HMENU)(INT_PTR)(1000 + gi * 100 + i),
+                        GetModuleHandle(NULL), NULL
+                    );
+                    
+                    SendMessage(hwndCheck, BM_SETCHECK, enabled ? BST_CHECKED : BST_UNCHECKED, 0);
+                    group.checkboxes.push_back(hwndCheck);
+                    yPos += 25;
+                }
+            }
+        }
+        
+        // Standalone schemes (e.g., custom)
+        for (size_t i = 0; i < g_standaloneSchemes.size(); ++i) {
+            bool enabled = g_backend.IsSchemeEnabled(g_standaloneSchemes[i]);
+            std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
+            std::wstring schemeName = conv.from_bytes(g_standaloneSchemes[i]);
+            
+            HWND hwndCheck = CreateWindowW(
+                L"BUTTON", schemeName.c_str(),
+                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                xStart, yPos, groupCheckW, 20,
+                hwndDlg, (HMENU)(INT_PTR)(4000 + i),
+                GetModuleHandle(NULL), NULL
+            );
+            
+            SendMessage(hwndCheck, BM_SETCHECK, enabled ? BST_CHECKED : BST_UNCHECKED, 0);
             yPos += 25;
         }
         
-        // Create Apply and Cancel buttons
-        CreateWindowW(
-            L"BUTTON",
-            L"Apply",
+        // Apply and Cancel buttons
+        HWND hBtnApply = CreateWindowW(
+            L"BUTTON", L"Apply",
             WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
             80, yPos + 15, 80, 30,
-            hwndDlg,
-            (HMENU)IDOK,
-            GetModuleHandle(NULL),
-            NULL
+            hwndDlg, (HMENU)IDOK,
+            GetModuleHandle(NULL), NULL
         );
         
-        CreateWindowW(
-            L"BUTTON",
-            L"Cancel",
+        HWND hBtnCancel = CreateWindowW(
+            L"BUTTON", L"Cancel",
             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
             180, yPos + 15, 80, 30,
-            hwndDlg,
-            (HMENU)IDCANCEL,
-            GetModuleHandle(NULL),
-            NULL
+            hwndDlg, (HMENU)IDCANCEL,
+            GetModuleHandle(NULL), NULL
         );
         
-        // Resize dialog based on number of schemes
-        int dialogHeight = yPos + 80;  // Increased for button visibility
-        SetWindowPos(hwndDlg, NULL, 0, 0, 380, dialogHeight, SWP_NOMOVE | SWP_NOZORDER);
+        // Resize dialog 
+        int dialogHeight = yPos + 90;
+        SetWindowPos(hwndDlg, NULL, 0, 0, 400, dialogHeight, SWP_NOMOVE | SWP_NOZORDER);
         
         return 0;
     }
     
     case WM_COMMAND:
-        if (LOWORD(wParam) == IDOK) {
-            // Apply changes
-            for (size_t i = 0; i < g_schemeCheckboxes.size(); ++i) {
-                LRESULT checked = SendMessage(g_schemeCheckboxes[i], BM_GETCHECK, 0, 0);
-                bool shouldEnable = (checked == BST_CHECKED);
-                bool currentlyEnabled = g_backend.IsSchemeEnabled(g_schemeFiles[i]);
+    {
+        int id = LOWORD(wParam);
+        
+        // Group checkbox clicked
+        if (id >= 2000 && id < 3000) {
+            size_t groupIdx = id - 2000;
+            if (groupIdx < g_schemeGroups.size()) {
+                LRESULT checked = SendMessage(g_schemeGroups[groupIdx].checkboxGroup, BM_GETCHECK, 0, 0);
+                bool enable = (checked == BST_CHECKED);
                 
-                if (shouldEnable && !currentlyEnabled) {
-                    g_backend.EnableScheme(g_schemeFiles[i]);
-                } else if (!shouldEnable && currentlyEnabled) {
-                    g_backend.DisableScheme(g_schemeFiles[i]);
+                // Update all child checkboxes
+                for (HWND hwndCheck : g_schemeGroups[groupIdx].checkboxes) {
+                    SendMessage(hwndCheck, BM_SETCHECK, enable ? BST_CHECKED : BST_UNCHECKED, 0);
+                }
+            }
+            return 0;
+        }
+        
+        // Expand/Collapse button clicked
+        if (id >= 3000 && id < 4000) {
+            size_t groupIdx = id - 3000;
+            if (groupIdx < g_schemeGroups.size()) {
+                auto& group = g_schemeGroups[groupIdx];
+                group.expanded = !group.expanded;
+                
+                int heightChange = (int)group.checkboxes.size() * 25;
+                
+                // Toggle visibility of child checkboxes
+                for (HWND hwndCheck : group.checkboxes) {
+                    ShowWindow(hwndCheck, group.expanded ? SW_SHOW : SW_HIDE);
+                }
+                
+                // Update button text
+                SetWindowTextW(group.buttonExpand, group.expanded ? L"-" : L"+");
+                
+                // Move all controls below this group
+                RECT groupRect;
+                GetWindowRect(group.buttonExpand, &groupRect);
+                POINT groupPt = {groupRect.left, groupRect.bottom};
+                ScreenToClient(hwndDlg, &groupPt);
+                int moveStartY = groupPt.y + 5;
+                
+                // Move subsequent groups
+                for (size_t gi = groupIdx + 1; gi < g_schemeGroups.size(); ++gi) {
+                    RECT rc;
+                    GetWindowRect(g_schemeGroups[gi].checkboxGroup, &rc);
+                    POINT pt = {rc.left, rc.top};
+                    ScreenToClient(hwndDlg, &pt);
+                    
+                    int newY = group.expanded ? pt.y + heightChange : pt.y - heightChange;
+                    SetWindowPos(g_schemeGroups[gi].checkboxGroup, NULL, pt.x, newY, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+                    SetWindowPos(g_schemeGroups[gi].buttonExpand, NULL, pt.x + 325, newY - 2, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+                    
+                    // Move child checkboxes
+                    for (HWND hwndCheck : g_schemeGroups[gi].checkboxes) {
+                        GetWindowRect(hwndCheck, &rc);
+                        pt = {rc.left, rc.top};
+                        ScreenToClient(hwndDlg, &pt);
+                        SetWindowPos(hwndCheck, NULL, pt.x, group.expanded ? pt.y + heightChange : pt.y - heightChange, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+                    }
+                }
+                
+                // Move standalone schemes
+                HWND hwndChild = GetWindow(hwndDlg, GW_CHILD);
+                while (hwndChild) {
+                    int ctrlId = GetDlgCtrlID(hwndChild);
+                    if (ctrlId >= 4000 && ctrlId < 5000) {
+                        RECT rc;
+                        GetWindowRect(hwndChild, &rc);
+                        POINT pt = {rc.left, rc.top};
+                        ScreenToClient(hwndDlg, &pt);
+                        SetWindowPos(hwndChild, NULL, pt.x, group.expanded ? pt.y + heightChange : pt.y - heightChange, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+                    }
+                    hwndChild = GetWindow(hwndChild, GW_HWNDNEXT);
+                }
+                
+                // Move Apply and Cancel buttons
+                HWND hBtnApply = GetDlgItem(hwndDlg, IDOK);
+                HWND hBtnCancel = GetDlgItem(hwndDlg, IDCANCEL);
+                if (hBtnApply) {
+                    RECT rc;
+                    GetWindowRect(hBtnApply, &rc);
+                    POINT pt = {rc.left, rc.top};
+                    ScreenToClient(hwndDlg, &pt);
+                    SetWindowPos(hBtnApply, NULL, pt.x, group.expanded ? pt.y + heightChange : pt.y - heightChange, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+                }
+                if (hBtnCancel) {
+                    RECT rc;
+                    GetWindowRect(hBtnCancel, &rc);
+                    POINT pt = {rc.left, rc.top};
+                    ScreenToClient(hwndDlg, &pt);
+                    SetWindowPos(hBtnCancel, NULL, pt.x, group.expanded ? pt.y + heightChange : pt.y - heightChange, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+                }
+                
+                // Adjust dialog height
+                RECT rc;
+                GetWindowRect(hwndDlg, &rc);
+                if (group.expanded) {
+                    SetWindowPos(hwndDlg, NULL, 0, 0, rc.right - rc.left, rc.bottom - rc.top + heightChange, SWP_NOMOVE | SWP_NOZORDER);
+                } else {
+                    SetWindowPos(hwndDlg, NULL, 0, 0, rc.right - rc.left, rc.bottom - rc.top - heightChange, SWP_NOMOVE | SWP_NOZORDER);
+                }
+            }
+            return 0;
+        }
+        
+        // Apply button
+        if (id == IDOK) {
+            // Apply group schemes
+            for (const auto& group : g_schemeGroups) {
+                for (size_t i = 0; i < group.schemes.size(); ++i) {
+                    if (i < group.checkboxes.size() && IsWindow(group.checkboxes[i])) {
+                        LRESULT checked = SendMessage(group.checkboxes[i], BM_GETCHECK, 0, 0);
+                        bool shouldEnable = (checked == BST_CHECKED);
+                        bool currentlyEnabled = g_backend.IsSchemeEnabled(group.schemes[i]);
+                        
+                        if (shouldEnable && !currentlyEnabled) {
+                            g_backend.EnableScheme(group.schemes[i]);
+                        } else if (!shouldEnable && currentlyEnabled) {
+                            g_backend.DisableScheme(group.schemes[i]);
+                        }
+                    }
                 }
             }
             
-            // Reload dictionary with new scheme selection
+            // Apply standalone schemes - need to find their checkboxes
+            HWND hwndChild = GetWindow(hwndDlg, GW_CHILD);
+            while (hwndChild) {
+                int ctrlId = GetDlgCtrlID(hwndChild);
+                if (ctrlId >= 4000 && ctrlId < 5000) {
+                    size_t idx = ctrlId - 4000;
+                    if (idx < g_standaloneSchemes.size()) {
+                        LRESULT checked = SendMessage(hwndChild, BM_GETCHECK, 0, 0);
+                        bool shouldEnable = (checked == BST_CHECKED);
+                        bool currentlyEnabled = g_backend.IsSchemeEnabled(g_standaloneSchemes[idx]);
+                        
+                        if (shouldEnable && !currentlyEnabled) {
+                            g_backend.EnableScheme(g_standaloneSchemes[idx]);
+                        } else if (!shouldEnable && currentlyEnabled) {
+                            g_backend.DisableScheme(g_standaloneSchemes[idx]);
+                        }
+                    }
+                }
+                hwndChild = GetWindow(hwndChild, GW_HWNDNEXT);
+            }
+            
+            // Reload dictionary
             g_backend.ReloadSchemes();
             
-            g_schemeCheckboxes.clear();
-            DestroyWindow(hwndDlg);
-            return 0;
-        } else if (LOWORD(wParam) == IDCANCEL) {
-            g_schemeCheckboxes.clear();
+            g_schemeGroups.clear();
             DestroyWindow(hwndDlg);
             return 0;
         }
+        
+        // Cancel button
+        if (id == IDCANCEL) {
+            g_schemeGroups.clear();
+            DestroyWindow(hwndDlg);
+            return 0;
+        }
+        
         break;
+    }
     
     case WM_CLOSE:
-        g_schemeCheckboxes.clear();
+        g_schemeGroups.clear();
         DestroyWindow(hwndDlg);
         return 0;
     }
@@ -337,9 +588,46 @@ void ShowSchemeSelectionDialog(HWND hwndParent) {
 // Scheme Reference popup window procedure
 LRESULT CALLBACK SchemeReferenceWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
+    static HWND hBtnC1 = NULL, hBtnC2 = NULL, hBtnV = NULL, hBtnElse = NULL;
+    
     switch (msg) {
     case WM_CREATE:
+    {
+        // Create 4 buttons (removed C3, C2 shows both cons2 and cons3)
+        int btnY = 10;
+        int btnW = 70;
+        int btnH = 30;
+        int spacing = 10;
+        int startX = 10;
+        
+        hBtnC1 = CreateWindowW(L"BUTTON", L"C1", 
+            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+            startX, btnY, btnW, btnH, hwnd, (HMENU)1001, GetModuleHandle(NULL), NULL);
+        
+        hBtnC2 = CreateWindowW(L"BUTTON", L"C2",
+            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+            startX + (btnW + spacing), btnY, btnW, btnH, hwnd, (HMENU)1002, GetModuleHandle(NULL), NULL);
+        
+        hBtnV = CreateWindowW(L"BUTTON", L"V",
+            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+            startX + 2 * (btnW + spacing), btnY, btnW, btnH, hwnd, (HMENU)1003, GetModuleHandle(NULL), NULL);
+        
+        hBtnElse = CreateWindowW(L"BUTTON", L"Else",
+            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+            startX + 3 * (btnW + spacing), btnY, btnW, btnH, hwnd, (HMENU)1004, GetModuleHandle(NULL), NULL);
+        
         return 0;
+    }
+    
+    case WM_COMMAND:
+    {
+        int id = LOWORD(wParam);
+        if (id >= 1001 && id <= 1004) {
+            g_schemeRefData.currentView = id - 1001;  // 0=C1, 1=C2, 2=V, 3=Else
+            InvalidateRect(hwnd, NULL, TRUE);
+        }
+        return 0;
+    }
     
     case WM_PAINT:
     {
@@ -350,43 +638,45 @@ LRESULT CALLBACK SchemeReferenceWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         
         Graphics g(hdc);
         g.SetSmoothingMode(SmoothingModeAntiAlias);
-        g.SetTextRenderingHint(TextRenderingHintAntiAlias);
         
         // Background
-        SolidBrush bgBrush(Color(255, 250, 250, 250));
+        SolidBrush bgBrush(Color(255, 255, 255, 255));
         g.FillRectangle(&bgBrush, 0, 0, rc.right, rc.bottom);
         
-        // Title
-        SolidBrush titleBrush(Color(255, 60, 60, 60));
-        Gdiplus::Font titleFont(L"Segoe UI Semibold", 16);
-        StringFormat centerFormat;
-        centerFormat.SetAlignment(StringAlignmentCenter);
-        centerFormat.SetLineAlignment(StringAlignmentNear);
-        
-        RectF titleRect(10.0f, 20.0f, (float)rc.right - 20, 40.0f);
-        g.DrawString(L"Scheme Reference", -1, &titleFont, titleRect, &centerFormat, &titleBrush);
-        
-        // Placeholder content
-        SolidBrush textBrush(Color(255, 100, 100, 100));
-        Gdiplus::Font textFont(L"Segoe UI", 11);
-        StringFormat leftFormat;
-        leftFormat.SetAlignment(StringAlignmentNear);
-        leftFormat.SetLineAlignment(StringAlignmentNear);
-        
-        RectF contentRect(20.0f, 80.0f, (float)rc.right - 40, (float)rc.bottom - 100);
-        std::wstring content = 
-            L"IPA Input Scheme Reference\\n\\n"
-            L"[Image/Chart Placeholder]\\n\\n"
-            L"This window displays:\\n"
-            L"  • Character mappings\\n"
-            L"  • Key combinations\\n"
-            L"  • Tone markers (T1-T5)\\n"
-            L"  • Special symbols\\n\\n"
-            L"Future: Load reference image from\\n"
-            L"  uicon\\\\scheme_reference.png\\n\\n"
-            L"This window does not block\\n"
-            L"the main input window.";
-        g.DrawString(content.c_str(), -1, &textFont, contentRect, &leftFormat, &textBrush);
+        // Draw current image(s)
+        int yPos = 50;
+        switch (g_schemeRefData.currentView) {
+        case 0:  // C1
+            if (g_schemeRefData.cons1 && g_schemeRefData.cons1->GetLastStatus() == Ok) {
+                g.DrawImage(g_schemeRefData.cons1, 10, yPos, 
+                    g_schemeRefData.cons1->GetWidth(), g_schemeRefData.cons1->GetHeight());
+            }
+            break;
+        case 1:  // C2 - show both cons2 and cons3
+            if (g_schemeRefData.cons2 && g_schemeRefData.cons2->GetLastStatus() == Ok) {
+                int h2 = g_schemeRefData.cons2->GetHeight();
+                g.DrawImage(g_schemeRefData.cons2, 10, yPos,
+                    g_schemeRefData.cons2->GetWidth(), h2);
+                yPos += h2 + 10;
+            }
+            if (g_schemeRefData.cons3 && g_schemeRefData.cons3->GetLastStatus() == Ok) {
+                g.DrawImage(g_schemeRefData.cons3, 10, yPos,
+                    g_schemeRefData.cons3->GetWidth(), g_schemeRefData.cons3->GetHeight());
+            }
+            break;
+        case 2:  // V
+            if (g_schemeRefData.vowel && g_schemeRefData.vowel->GetLastStatus() == Ok) {
+                g.DrawImage(g_schemeRefData.vowel, 10, yPos,
+                    g_schemeRefData.vowel->GetWidth(), g_schemeRefData.vowel->GetHeight());
+            }
+            break;
+        case 3:  // Else
+            if (g_schemeRefData.elseAndTones && g_schemeRefData.elseAndTones->GetLastStatus() == Ok) {
+                g.DrawImage(g_schemeRefData.elseAndTones, 10, yPos,
+                    g_schemeRefData.elseAndTones->GetWidth(), g_schemeRefData.elseAndTones->GetHeight());
+            }
+            break;
+        }
         
         EndPaint(hwnd, &ps);
         return 0;
@@ -705,13 +995,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     wcRef.hCursor = LoadCursor(NULL, IDC_ARROW);
                     RegisterClassW(&wcRef);
                     
-                    // Create window
+                    // Load scheme reference images
+                    g_schemeRefData.LoadAll();
+                    
+                    // Create window (larger to fit images)
                     g_hwndSchemeReference = CreateWindowExW(
                         WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
                         L"SchemeReferenceWindow",
                         L"Scheme Reference",
                         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME,
-                        CW_USEDEFAULT, CW_USEDEFAULT, 350, 500,
+                        CW_USEDEFAULT, CW_USEDEFAULT, 900, 700,
                         NULL,  // No parent, independent window
                         NULL,
                         GetModuleHandle(NULL),
@@ -1059,6 +1352,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
 
     // Cleanup
     g_icons.UnloadAll();
+    g_schemeRefData.UnloadAll();
     GdiplusShutdown(g_gdiplusToken);
 
     return 0;

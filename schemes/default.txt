@@ -51,17 +51,19 @@ hqx,hkxz,h2pz,h2 ʕ
 //h h
 hz,hc ɦ
 
+uw ʍ
+
 vh ʋ
 vl ⱱ
 rh ɹ
 rl ɾ
 srh ɻ
-srl ɽ
+srl,rr  ɽ
 bv ʙ
 //r r
 qr ʀ
 hr ʜ
-hrz ʢ
+hrz,h4 ʢ
 
 ls ɬ
 lz ɮ
@@ -69,8 +71,8 @@ lz ɮ
 ll ɺ
 lr ɭ
 lrl ɭ̆
-jl,jh ʎ
-whl ʟ
+jl,jh,lj ʎ
+whl,lwh ʟ
 
 bM ɓ
 dM ɗ
@@ -178,3 +180,11 @@ P' ˈ
 P'' ʺ
 Phq,Ph1 ˀ
 Phqx,Ph2 ˁ
+
+//after 0.0.329
+
+Dmr ◌̹
+Qmr ◌͗
+Dlr ◌̜
+Qlr ◌͑
+lB~ ɫ
