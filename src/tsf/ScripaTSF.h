@@ -28,13 +28,22 @@ public:
 
     // Get the current composition (UTF-16) to be shown in the TSF composition
     std::wstring GetComposition() const;
+    
+    // Get current buffer string
+    std::wstring GetBuffer() const;
 
     // Get candidates (UTF-16) for UI display
     std::vector<std::wstring> GetCandidates() const;
+    
+    // Select a candidate by index
+    void SelectCandidate(int index);
 
     // 缓冲区操作
     void deleteLastChar() { engine_.deleteLastChar(); }
     void clearBuffer() { engine_.clearBuffer(); }
+    
+    // Get current mode (true = IPA, false = ENG)
+    bool IsIPAMode() const { return GetMode(); }
 
     // 字库管理接口
     void EnableScheme(const std::string& schemeName);

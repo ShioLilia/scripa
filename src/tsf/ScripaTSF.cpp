@@ -127,3 +127,34 @@ bool ScripaTSF::ReloadSchemes()
     
     return count > 0;
 }
+
+std::wstring ScripaTSF::GetBuffer() const
+{
+    return utf8_to_wstring(engine_.getBuffer());
+}
+
+void ScripaTSF::SelectCandidate(int index)
+{
+    auto candidates = engine_.getCandidates();
+    if (index >= 0 && index < (int)candidates.size())
+    {
+        // Get selected candidate
+        const auto& selected = candidates[index];
+        
+        // Filter out U+25CC
+        std::u32string filtered;
+        for (char32_t ch : selected) {
+            if (ch != 0x25CC) {
+                filtered.push_back(ch);
+            }
+        }
+        
+        // Convert to UTF-8 then commit
+        std::string utf8 = utf32_to_utf8(filtered);
+        
+        // Commit the selected candidate and clear buffer
+        // Note: In TSF context, the actual insertion is handled by TextService
+        // This just clears the engine state
+        engine_.clearBuffer();
+    }
+}

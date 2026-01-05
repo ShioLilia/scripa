@@ -1,0 +1,190 @@
+//m m
+//p p
+//b b
+mv ɱ
+//f f
+//v v
+//n n
+//t t
+//d d
+trn ɳ
+tr ʈ
+dr ɖ
+tx ȶ
+dx ȡ
+nx ȵ
+cn ɲ
+//c c
+cz ɟ
+gn ŋ
+//k k
+//g g
+qn ɴ
+//q q
+qg,qz ɢ
+hk,h3 ʡ
+hq,h1 ʔ
+
+fw ɸ
+vw,bw β
+td θ
+dd ð
+//s s
+//z z
+sh ʃ
+zh ʒ
+sr ʂ
+zr ʐ
+cx,sx ɕ
+zx ʑ
+cc,cs ç
+jx,jc ʝ
+//j j
+//x x
+xz,gx ɣ
+jh,jy ɥ
+wh ɰ
+qx χ
+rx,qxz ʁ
+h2p,hkx ħ
+hqx,hkxz,h2pz,h2 ʕ
+//h h
+hz,hc ɦ
+
+uw ʍ
+
+vh ʋ
+vl ⱱ
+rh ɹ
+rl ɾ
+srh ɻ
+srl,rr  ɽ
+bv ʙ
+//r r
+qr ʀ
+hr ʜ
+hrz,h4 ʢ
+
+ls ɬ
+lz ɮ
+//l l
+ll ɺ
+lr ɭ
+lrl ɭ̆
+jl,jh,lj ʎ
+whl,lwh ʟ
+
+bM ɓ
+dM ɗ
+drM ᶑ
+cM,czM ʄ
+gM ɠ
+qM,qzM ʛ
+
+pC ʘ
+tdC ǀ
+tC ǃ
+lC ǁ
+trC 𝼊
+cC ǂ
+xC ʞ
+
+//a a
+ae æ
+ea ɛ
+eDp e̞
+//e e
+ei ɪ
+//i i
+
+oa ɶ
+oe,oea œ
+eoDp ø̞
+eo,oe ø
+ey ʏ
+//y y
+
+ac,aQ.. ä
+aec ɐ
+eac ɜ
+ee,schwa ə
+ec ɘ
+icDp ɨ̞
+ic ɨ
+
+oac,oaQ.. ɒ̈
+oec,oeac ɞ
+eoc,oec ɵ
+ucDp ʉ̞
+uc ʉ
+
+ab ɑ
+eab ʌ
+ebDp ɤ̞
+eb ɤ
+ibDp,ubDp ɯ̞
+ib,ub ɯ
+
+oab,ob ɒ
+oo ɔ
+oDp o̞
+//o o
+ub ʊ
+//u u
+
+D~ ◌̰
+Q~,Qnn ◌̃
+B~ ◌̴
+Dnn ◌̯
+
+Dm ◌̼
+Dn ◌̪
+Du ◌̺
+Da ◌̻
+D+,Dchr,Dhr  ◌̟
+D- ◌̠
+
+D, ◌̩
+Q, ◌̍
+Qx ◌̽
+Dx ◌͓
+Q. ◌̇
+D. ◌̣
+Q.. ◌̈
+D.. ◌̤
+Do ◌̥
+Qo ◌̊
+
+Dv ◌̬
+Dt ◌̝
+Dp ◌̞
+Dl ◌̘
+Dr ◌̙
+
+Br ◌˞
+
+W ◌͡ 
+L ː
+
+Ph ʰ
+Phz ʱ
+Pj ʲ
+Pr ʳ
+Prh ʴ
+Psrh ʵ
+Prx，Pqxz ʶ
+Pw ʷ
+Py ʸ
+P'13 ʹ
+P' ˈ
+P'' ʺ
+Phq,Ph1 ˀ
+Phqx,Ph2 ˁ
+
+//after 0.0.329
+
+Dmr ◌̹
+Qmr ◌͗
+Dlr ◌̜
+Qlr ◌͑
+lB~ ɫ
