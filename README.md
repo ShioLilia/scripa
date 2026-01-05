@@ -4,7 +4,7 @@
 
 ScrIPA, a new input method for IPA. It features a unique default encoding system that is more scientific and easier to memorize.
 
-##### v0.0.4xx has been released. Download the full package directly and run the .exe file in the build folder.
+##### v0.0.4xx has been released. Download the full package directly and run the scripa_app/build/0.0.4xx.exe file.
 
 ### How to Use
 
@@ -46,7 +46,7 @@ custom: Completely up to you.
 
 ScrIPA est une méthode de saisie IPA nouvellement conçue. Elle comprend un système de codage par défaut unique, plus scientifique et plus facile à mémoriser.
 
-##### La version v0.0.4xx est publiée. Téléchargez directement le paquet complet et lancez le fichier .exe dans le dossier build.
+##### La version v0.0.4xx est publiée. Téléchargez directement le paquet complet et lancez le fichier scripa_app/build/0.0.4xx.exe.
 
 ### Mode d’emploi
 
@@ -86,7 +86,7 @@ custom : À votre entière liberté.
 
 ScrIPA, 一款新设计的IPA输入法。包括了一种独特的、更科学更好记的默认编码方式。
 
-##### v0.0.4xx已经发布，直接整包下载，点击scripa_app/build文件夹里的.exe运行。只需要scripa_app/一个文件夹的内容即可使用。
+##### v0.0.4xx已经发布，直接下载，点击scripa_app/build文件夹里的.exe运行。只需要scripa_app/一个文件夹的内容即可使用。
 
 ### 使用方法
 
