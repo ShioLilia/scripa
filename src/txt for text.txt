@@ -1,4 +1,4 @@
 for test:
 srebgnT51 tanT51 kPhwaeiT51 lebT51 圣诞快乐
 
-cl /std:c++17 /utf-8 /EHsc /W4 /Zi /Fe:..\build\501.exe ..\src\ui\candidate_demo.cpp ..\src\tsf\ScripaTSF.cpp ..\src\ui\candidate_demo.res /link gdiplus.lib user32.lib gdi32.lib shell32.lib
+cl /std:c++17 /utf-8 /EHsc /W4 /Zi /Fe:..\build\502.exe ..\src\ui\candidate_demo.cpp ..\src\tsf\ScripaTSF.cpp ..\src\ui\candidate_demo.res /link gdiplus.lib user32.lib gdi32.lib shell32.lib
