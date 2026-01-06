@@ -256,6 +256,12 @@ STDMETHODIMP CTextService::OnTestKeyDown(ITfContext* pContext, WPARAM wParam, LP
     {
         *pfEaten = TRUE; // We handle numpad as input
     }
+    // Page navigation keys
+    else if (wParam == VK_PRIOR || wParam == VK_NEXT || wParam == VK_OEM_4 || wParam == VK_OEM_6)
+    {
+        // PageUp, PageDown, '[', ']'
+        *pfEaten = TRUE;
+    }
     
     return S_OK;
 }
@@ -304,6 +310,26 @@ STDMETHODIMP CTextService::OnKeyDown(ITfContext* pContext, WPARAM wParam, LPARAM
         _UpdateCompositionString(pContext);
         *pfEaten = TRUE;
         return S_OK;
+    }
+
+    // Handle page navigation
+    if (wParam == VK_PRIOR || wParam == VK_OEM_4)  // PageUp or '['
+    {
+        if (_pCandidateWindow && !_backend.GetCandidates().empty())
+        {
+            _pCandidateWindow->PrevPage();
+            *pfEaten = TRUE;
+            return S_OK;
+        }
+    }
+    else if (wParam == VK_NEXT || wParam == VK_OEM_6)  // PageDown or ']'
+    {
+        if (_pCandidateWindow && !_backend.GetCandidates().empty())
+        {
+            _pCandidateWindow->NextPage();
+            *pfEaten = TRUE;
+            return S_OK;
+        }
     }
 
     // Handle space - select first candidate
@@ -851,15 +877,23 @@ void CTextService::_PositionWindows()
 
 void CTextService::_OnCandidateSelected(int index)
 {
-    if (!_pContext)
+    if (!_pContext || !_pCandidateWindow)
         return;
     
     auto candidates = _backend.GetCandidates();
-    if (index < 0 || index >= (int)candidates.size())
+    if (candidates.empty())
+        return;
+    
+    // Calculate actual index based on current page
+    int pageIndex = _pCandidateWindow->GetCurrentPage();
+    int itemsPerPage = 8;  // Match _itemsPerPage in CCandidateWindow
+    int actualIndex = pageIndex * itemsPerPage + index;
+    
+    if (actualIndex < 0 || actualIndex >= (int)candidates.size())
         return;
     
     // Get the selected candidate text
-    std::wstring selectedText = candidates[index];
+    std::wstring selectedText = candidates[actualIndex];
     
     // End composition with the selected text
     if (_pComposition)

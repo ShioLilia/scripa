@@ -4,7 +4,7 @@
 
 ScrIPA, 一款新设计的IPA输入法。包括了一种独特的、更科学更好记的默认编码方式。
 
-##### v0.0.4xx已经发布，直接下载，点击scripa_app/build/0.0.4xx.exe运行。只需要下载 scripa_app/一个文件夹的内容即可使用。
+##### v0.0.5已经发布，直接下载，点击scripa_app/build/0.0.5xx.exe运行。只需要下载 scripa_app/一个文件夹的内容即可使用。
 
 ### 使用方法
 
@@ -20,9 +20,13 @@ ScrIPA, 一款新设计的IPA输入法。包括了一种独特的、更科学更
 
 2.左边书状按钮可以打开默认编码库速记表。速记表暂时是手写的，且某些不在表上的音标没有显示，今后会设计更完整、可交互的图表。
 
-3.可以选择特定的转写编码库是否生效，这可以为某些特定语言的使用者提供便利。
+3.左二可以展开作者信息。
 
-4.可以通过窗口编辑和客制化自己的custom库。
+4.右侧箭头按钮可以翻页。
+
+5.在设置按钮下，可以选择特定的转写编码库是否生效，这可以为某些特定语言的使用者提供便利。
+
+6.在设置按钮下，可以通过窗口编辑和客制化自己的custom库。
 
 
 ### 编码库
@@ -42,7 +46,7 @@ custom:任君选择。
 
 ScrIPA, a new input method for IPA. It features a unique default encoding system that is more scientific and easier to memorize.
 
-##### v0.0.4xx has been released. Download the full package directly and run the scripa_app/build/0.0.4xx.exe file.
+##### v0.0.5 has been released. Download the full package directly and run the scripa_app/build/0.0.5xx.exe file.
 
 ### How to Use
 
@@ -84,7 +88,7 @@ custom: Completely up to you.
 
 ScrIPA est une méthode de saisie IPA nouvellement conçue. Elle comprend un système de codage par défaut unique, plus scientifique et plus facile à mémoriser.
 
-##### La version v0.0.4xx est publiée. Téléchargez directement le paquet complet et lancez le fichier scripa_app/build/0.0.4xx.exe.
+##### La version v0.0.5xx est publiée. Téléchargez directement le paquet complet et lancez le fichier scripa_app/build/0.0.5xx.exe.
 
 ### Mode d’emploi
 
@@ -120,3 +124,5 @@ specialized-music-chord : Saisie des noms de notes, sortie d’accords. 【Non e
 
 custom : À votre entière liberté.
 
+
+ 

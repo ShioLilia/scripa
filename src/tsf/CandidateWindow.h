@@ -18,7 +18,11 @@ public:
     void Destroy();
     void Show(BOOL bShow);
     void Move(int x, int y);
-    void Update(const std::vector<std::wstring>& candidates, int selected);
+    void Update(const std::vector<std::wstring>& candidates, int selected, int pageIndex = 0);
+    void NextPage();
+    void PrevPage();
+    int GetCurrentPage() const { return _pageIndex; }
+    int GetTotalPages() const;
     
     HWND GetWnd() { return _hwnd; }
     

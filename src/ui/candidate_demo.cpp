@@ -88,6 +88,7 @@ struct CandidateUI {
     int itemsPerPage = 8;
     bool modeIPA = true;
     bool visible = false;
+    bool darkMode = false;  // 夜间模式
 };
 
 static CandidateUI g_ui;
@@ -133,6 +134,9 @@ static HWND g_hwndParentMain = NULL;
 // Scheme reference popup window
 static HWND g_hwndSchemeReference = NULL;
 
+// About dialog window
+static HWND g_hwndAboutDialog = NULL;
+
 // Scheme reference images
 struct SchemeReferenceData {
     Bitmap* cons1 = nullptr;
@@ -173,7 +177,7 @@ static std::vector<SettingsMenuItem> g_menuItems;
 struct SchemeGroup {
     std::string name;
     std::vector<std::string> schemes;
-    bool expanded = true;
+    bool expanded = false;  // 默认收起
     HWND checkboxGroup = NULL;
     HWND buttonExpand = NULL;
     std::vector<HWND> checkboxes;
@@ -181,6 +185,9 @@ struct SchemeGroup {
 
 static std::vector<SchemeGroup> g_schemeGroups;
 static std::vector<std::string> g_standaloneSchemes;  // custom等独立scheme
+
+// Forward declarations
+void ShowAboutDialog(HWND hwndParent);
 
 LRESULT CALLBACK SchemeSelectionDlgProc(HWND hwndDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -262,22 +269,24 @@ LRESULT CALLBACK SchemeSelectionDlgProc(HWND hwndDlg, UINT msg, WPARAM wParam, L
             
             yPos += 25;
             
-            // Child scheme checkboxes
-            if (group.expanded) {
-                for (size_t i = 0; i < group.schemes.size(); ++i) {
-                    bool enabled = g_backend.IsSchemeEnabled(group.schemes[i]);
-                    std::wstring schemeName = conv.from_bytes(group.schemes[i]);
-                    
-                    HWND hwndCheck = CreateWindowW(
-                        L"BUTTON", schemeName.c_str(),
-                        WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                        xStart + 20, yPos, itemCheckW, 20,
-                        hwndDlg, (HMENU)(INT_PTR)(1000 + gi * 100 + i),
-                        GetModuleHandle(NULL), NULL
-                    );
-                    
-                    SendMessage(hwndCheck, BM_SETCHECK, enabled ? BST_CHECKED : BST_UNCHECKED, 0);
-                    group.checkboxes.push_back(hwndCheck);
+            // Child scheme checkboxes - always create them, but control visibility
+            for (size_t i = 0; i < group.schemes.size(); ++i) {
+                bool enabled = g_backend.IsSchemeEnabled(group.schemes[i]);
+                std::wstring schemeName = conv.from_bytes(group.schemes[i]);
+                
+                HWND hwndCheck = CreateWindowW(
+                    L"BUTTON", schemeName.c_str(),
+                    WS_CHILD | BS_AUTOCHECKBOX | (group.expanded ? WS_VISIBLE : 0),
+                    xStart + 20, yPos, itemCheckW, 20,
+                    hwndDlg, (HMENU)(INT_PTR)(1000 + gi * 100 + i),
+                    GetModuleHandle(NULL), NULL
+                );
+                
+                SendMessage(hwndCheck, BM_SETCHECK, enabled ? BST_CHECKED : BST_UNCHECKED, 0);
+                group.checkboxes.push_back(hwndCheck);
+                
+                // Only increment yPos if expanded (for dialog sizing)
+                if (group.expanded) {
                     yPos += 25;
                 }
             }
@@ -353,20 +362,35 @@ LRESULT CALLBACK SchemeSelectionDlgProc(HWND hwndDlg, UINT msg, WPARAM wParam, L
                 
                 int heightChange = (int)group.checkboxes.size() * 25;
                 
-                // Toggle visibility of child checkboxes
-                for (HWND hwndCheck : group.checkboxes) {
-                    ShowWindow(hwndCheck, group.expanded ? SW_SHOW : SW_HIDE);
+                // Toggle visibility and reposition child checkboxes
+                RECT groupRect;
+                GetWindowRect(group.checkboxGroup, &groupRect);
+                POINT groupPt = {groupRect.left, groupRect.bottom};
+                ScreenToClient(hwndDlg, &groupPt);
+                
+                for (size_t i = 0; i < group.checkboxes.size(); ++i) {
+                    HWND hwndCheck = group.checkboxes[i];
+                    if (group.expanded) {
+                        // Position and show
+                        int yPos = groupPt.y + 5 + (int)i * 25;
+                        RECT rc;
+                        GetWindowRect(hwndCheck, &rc);
+                        int width = rc.right - rc.left;
+                        int height = rc.bottom - rc.top;
+                        POINT pt = {rc.left, rc.top};
+                        ScreenToClient(hwndDlg, &pt);
+                        SetWindowPos(hwndCheck, NULL, pt.x, yPos, width, height, SWP_NOZORDER);
+                        ShowWindow(hwndCheck, SW_SHOW);
+                    } else {
+                        // Just hide
+                        ShowWindow(hwndCheck, SW_HIDE);
+                    }
                 }
                 
                 // Update button text
                 SetWindowTextW(group.buttonExpand, group.expanded ? L"-" : L"+");
                 
                 // Move all controls below this group
-                RECT groupRect;
-                GetWindowRect(group.buttonExpand, &groupRect);
-                POINT groupPt = {groupRect.left, groupRect.bottom};
-                ScreenToClient(hwndDlg, &groupPt);
-                int moveStartY = groupPt.y + 5;
                 
                 // Move subsequent groups
                 for (size_t gi = groupIdx + 1; gi < g_schemeGroups.size(); ++gi) {
@@ -585,6 +609,162 @@ void ShowSchemeSelectionDialog(HWND hwndParent) {
     }
 }
 
+// About Dialog - Author Information
+LRESULT CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    static Bitmap* githubIcon = NULL;
+    static RECT githubBtnRect = {0, 0, 0, 0};
+    
+    switch (msg) {
+    case WM_CREATE:
+    {
+        // Load GitHub icon
+        githubIcon = new Bitmap(L"..\\uicon\\github.png");
+        
+        // Calculate button position (center bottom)
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+        int btnW = 48;
+        int btnH = 48;
+        githubBtnRect.left = (rc.right - btnW) / 2;
+        githubBtnRect.top = rc.bottom - btnH - 20;
+        githubBtnRect.right = githubBtnRect.left + btnW;
+        githubBtnRect.bottom = githubBtnRect.top + btnH;
+        
+        return 0;
+    }
+    
+    case WM_PAINT:
+    {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+        
+        Graphics g(hdc);
+        g.SetSmoothingMode(SmoothingModeAntiAlias);
+        
+        // Background
+        SolidBrush bgBrush(Color(255, 250, 250, 250));
+        g.FillRectangle(&bgBrush, 0, 0, rc.right, rc.bottom);
+        
+        // Title
+        FontFamily fontFamily(L"Segoe UI");
+        Font titleFont(&fontFamily, 18, FontStyleBold, UnitPixel);
+        SolidBrush textBrush(Color(255, 40, 40, 40));
+        StringFormat format;
+        format.SetAlignment(StringAlignmentCenter);
+        format.SetLineAlignment(StringAlignmentCenter);
+        
+        RectF titleRect(0, 20, (REAL)rc.right, 30);
+        g.DrawString(L"ScrIPA IPA Input Method", -1, &titleFont, titleRect, &format, &textBrush);
+        
+        // Author info
+        Font normalFont(&fontFamily, 12, FontStyleRegular, UnitPixel);
+        RectF infoRect(0, 70, (REAL)rc.right, 80);
+        g.DrawString(L"Author: ShioLilia\nVersion: 0.0.5\nLicense: GPLv3 and MIT", -1, &normalFont, infoRect, &format, &textBrush);
+        
+        // GitHub button
+        if (githubIcon && githubIcon->GetLastStatus() == Ok) {
+            g.DrawImage(githubIcon, githubBtnRect.left, githubBtnRect.top, 
+                        githubBtnRect.right - githubBtnRect.left, 
+                        githubBtnRect.bottom - githubBtnRect.top);
+        } else {
+            SolidBrush btnBrush(Color(255, 200, 200, 200));
+            g.FillRectangle(&btnBrush, githubBtnRect.left, githubBtnRect.top,
+                           githubBtnRect.right - githubBtnRect.left,
+                           githubBtnRect.bottom - githubBtnRect.top);
+        }
+        
+        // Border for GitHub button
+        Pen btnPen(Color(255, 100, 100, 100), 2);
+        g.DrawRectangle(&btnPen, githubBtnRect.left, githubBtnRect.top,
+                       githubBtnRect.right - githubBtnRect.left,
+                       githubBtnRect.bottom - githubBtnRect.top);
+        
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    
+    case WM_LBUTTONDOWN:
+    {
+        int x = LOWORD(lParam);
+        int y = HIWORD(lParam);
+        POINT pt = {x, y};
+        
+        if (PtInRect(&githubBtnRect, pt)) {
+            ShellExecuteW(NULL, L"open", L"https://github.com/ShioLilia/", NULL, NULL, SW_SHOW);
+        }
+        return 0;
+    }
+    
+    case WM_KEYDOWN:
+        if (wParam == VK_ESCAPE || wParam == VK_RETURN) {
+            ShowWindow(hwnd, SW_HIDE);
+        }
+        return 0;
+    
+    case WM_CLOSE:
+        ShowWindow(hwnd, SW_HIDE);
+        return 0;
+    
+    case WM_DESTROY:
+        if (githubIcon) {
+            delete githubIcon;
+            githubIcon = NULL;
+        }
+        g_hwndAboutDialog = NULL;
+        return 0;
+    }
+    
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+void ShowAboutDialog(HWND hwndParent)
+{
+    // Create window on first use
+    if (!g_hwndAboutDialog) {
+        static bool registered = false;
+        if (!registered) {
+            WNDCLASSW wc = {};
+            wc.lpfnWndProc = AboutDlgProc;
+            wc.hInstance = GetModuleHandle(NULL);
+            wc.lpszClassName = L"AboutDialog";
+            wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+            wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+            RegisterClassW(&wc);
+            registered = true;
+        }
+        
+        g_hwndAboutDialog = CreateWindowExW(
+            WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
+            L"AboutDialog",
+            L"About Scripa",
+            WS_POPUP | WS_CAPTION | WS_SYSMENU,
+            CW_USEDEFAULT, CW_USEDEFAULT, 400, 300,
+            NULL,  // No parent, independent window
+            NULL,
+            GetModuleHandle(NULL),
+            NULL
+        );
+        
+        if (!g_hwndAboutDialog) return;
+    }
+    
+    // Toggle visibility
+    if (IsWindowVisible(g_hwndAboutDialog)) {
+        ShowWindow(g_hwndAboutDialog, SW_HIDE);
+    } else {
+        // Center on parent
+        RECT rcParent, rcDlg;
+        GetWindowRect(hwndParent, &rcParent);
+        GetWindowRect(g_hwndAboutDialog, &rcDlg);
+        int x = rcParent.left + (rcParent.right - rcParent.left - (rcDlg.right - rcDlg.left)) / 2;
+        int y = rcParent.top + (rcParent.bottom - rcParent.top - (rcDlg.bottom - rcDlg.top)) / 2;
+        SetWindowPos(g_hwndAboutDialog, HWND_TOPMOST, x, y, 0, 0, SWP_NOSIZE | SWP_SHOWWINDOW);
+    }
+}
+
 // Scheme Reference popup window procedure
 LRESULT CALLBACK SchemeReferenceWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -639,8 +819,9 @@ LRESULT CALLBACK SchemeReferenceWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         Graphics g(hdc);
         g.SetSmoothingMode(SmoothingModeAntiAlias);
         
-        // Background
-        SolidBrush bgBrush(Color(255, 255, 255, 255));
+        // Background - dark mode support
+        Color bgColor = g_ui.darkMode ? Color(255, 45, 45, 48) : Color(255, 255, 255, 255);
+        SolidBrush bgBrush(bgColor);
         g.FillRectangle(&bgBrush, 0, 0, rc.right, rc.bottom);
         
         // Draw current image(s)
@@ -714,12 +895,16 @@ LRESULT CALLBACK SettingsMenuProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
         g.SetSmoothingMode(SmoothingModeAntiAlias);
         g.SetTextRenderingHint(TextRenderingHintAntiAlias);
         
-        // Background
-        SolidBrush bgBrush(Color(255, 245, 245, 245));
+        // Background - dark mode support
+        Color bgColor = g_ui.darkMode ? Color(255, 45, 45, 48) : Color(255, 245, 245, 245);
+        Color textColor = g_ui.darkMode ? Color(255, 245, 240, 230) : Color(255, 50, 50, 50);
+        Color hoverColor = g_ui.darkMode ? Color(255, 60, 60, 65) : Color(255, 220, 220, 220);
+        
+        SolidBrush bgBrush(bgColor);
         g.FillRectangle(&bgBrush, 0, 0, 200, (int)g_menuItems.size() * 32);
         
         // Draw menu items
-        SolidBrush textBrush(Color(255, 50, 50, 50));
+        SolidBrush textBrush(textColor);
         Gdiplus::Font font(L"Segoe UI", 10);
         StringFormat format;
         format.SetAlignment(StringAlignmentNear);
@@ -735,7 +920,7 @@ LRESULT CALLBACK SettingsMenuProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
             
             // Hover effect
             if (PtInRect(&itemRect, pt)) {
-                SolidBrush hoverBrush(Color(255, 220, 220, 220));
+                SolidBrush hoverBrush(hoverColor);
                 g.FillRectangle(&hoverBrush, 0, y, 200, 32);
             }
             
@@ -797,7 +982,9 @@ LRESULT CALLBACK SettingsMenuProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
                 MessageBoxW(g_hwndParentMain, L"Other Settings (TBD)", L"ScrIPA", MB_OK);
                 break;
             case 2: // Change Theme
-                MessageBoxW(g_hwndParentMain, L"Change Theme (TBD)", L"ScrIPA", MB_OK);
+                g_ui.darkMode = !g_ui.darkMode;
+                InvalidateRect(g_hwndParentMain, NULL, TRUE);
+                ShowWindow(hwnd, SW_HIDE);  // 关闭设置菜单
                 break;
             case 3: // Choose Schemes
                 ShowSchemeSelectionDialog(g_hwndParentMain);
@@ -1028,7 +1215,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 return 0;
             }
             if (PtInRect(&g_btnUser, POINT{x, y})) {
-                MessageBoxW(hwnd, L"User settings (TBD)", L"Scripa", MB_OK);
+                ShowAboutDialog(hwnd);
                 return 0;
             }
             if (PtInRect(&g_btnMode, POINT{x, y})) {
@@ -1145,9 +1332,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             Graphics g(hdc);
             g.SetSmoothingMode(SmoothingModeAntiAlias);
 
-            // background (white)
-            SolidBrush whiteBrush(Color(255, 255, 255));
-            g.FillRectangle(&whiteBrush, 0, 0, rc.right, rc.bottom);
+            // Background - dark mode support
+            Color bgColor = g_ui.darkMode ? Color(255, 45, 45, 48) : Color(255, 255, 255);
+            Color textColor = g_ui.darkMode ? Color(255, 245, 240, 230) : Color(255, 0, 0, 0);
+            Color borderColor = g_ui.darkMode ? Color(255, 80, 80, 80) : Color(255, 0, 0, 0);
+            Color btnBgColor = g_ui.darkMode ? Color(255, 245, 240, 230) : Color(255, 255, 255, 255);
+            
+            SolidBrush bgBrush(bgColor);
+            g.FillRectangle(&bgBrush, 0, 0, rc.right, rc.bottom);
 
             // draw toolbar (top 40 pixels)
             int toolbarY = 8;
@@ -1155,21 +1347,30 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             int btnSize = 30;
             int spacing = 8;
 
+            // Button background brush for dark mode
+            SolidBrush buttonBgBrush(btnBgColor);
+
             // default button
             g_btnDefault = {btnX, toolbarY, btnX + btnSize, toolbarY + btnSize};
+            if (g_ui.darkMode) {
+                g.FillRectangle(&buttonBgBrush, btnX, toolbarY, btnSize, btnSize);
+            }
             if (g_icons.default_icon && g_icons.default_icon->GetLastStatus() == Ok) {
                 g.DrawImage(g_icons.default_icon, btnX, toolbarY, btnSize, btnSize);
             } else {
                 SolidBrush btnBrush(Color(200, 200, 200));
                 g.FillRectangle(&btnBrush, btnX, toolbarY, btnSize, btnSize);
             }
-            Pen btnPen(Color(0, 0, 0), 1);
+            Pen btnPen(borderColor, 1);
             g.DrawRectangle(&btnPen, btnX, toolbarY, btnSize, btnSize);
 
             btnX += btnSize + spacing;
 
             // user button
             g_btnUser = {btnX, toolbarY, btnX + btnSize, toolbarY + btnSize};
+            if (g_ui.darkMode) {
+                g.FillRectangle(&buttonBgBrush, btnX, toolbarY, btnSize, btnSize);
+            }
             if (g_icons.user && g_icons.user->GetLastStatus() == Ok) {
                 g.DrawImage(g_icons.user, btnX, toolbarY, btnSize, btnSize);
             } else {
@@ -1182,6 +1383,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             // mode button (ENG/IPA)
             g_btnMode = {btnX, toolbarY, btnX + btnSize, toolbarY + btnSize};
+            if (g_ui.darkMode) {
+                g.FillRectangle(&buttonBgBrush, btnX, toolbarY, btnSize, btnSize);
+            }
             if (g_ui.modeIPA && g_icons.ipa && g_icons.ipa->GetLastStatus() == Ok) {
                 g.DrawImage(g_icons.ipa, btnX, toolbarY, btnSize, btnSize);
             } else if (!g_ui.modeIPA && g_icons.eng && g_icons.eng->GetLastStatus() == Ok) {
@@ -1197,6 +1401,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             // left button
             g_btnLeft = {btnX, toolbarY, btnX + btnSize, toolbarY + btnSize};
+            if (g_ui.darkMode) {
+                g.FillRectangle(&buttonBgBrush, btnX, toolbarY, btnSize, btnSize);
+            }
             if (g_icons.left && g_icons.left->GetLastStatus() == Ok) {
                 g.DrawImage(g_icons.left, btnX, toolbarY, btnSize, btnSize);
             } else {
@@ -1209,6 +1416,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             // right button
             g_btnRight = {btnX, toolbarY, btnX + btnSize, toolbarY + btnSize};
+            if (g_ui.darkMode) {
+                g.FillRectangle(&buttonBgBrush, btnX, toolbarY, btnSize, btnSize);
+            }
             if (g_icons.right && g_icons.right->GetLastStatus() == Ok) {
                 g.DrawImage(g_icons.right, btnX, toolbarY, btnSize, btnSize);
             } else {
@@ -1221,6 +1431,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             // settings button
             g_btnSettings = {btnX, toolbarY, btnX + btnSize, toolbarY + btnSize};
+            if (g_ui.darkMode) {
+                g.FillRectangle(&buttonBgBrush, btnX, toolbarY, btnSize, btnSize);
+            }
             if (g_icons.settings && g_icons.settings->GetLastStatus() == Ok) {
                 g.DrawImage(g_icons.settings, btnX, toolbarY, btnSize, btnSize);
             } else {
@@ -1234,7 +1447,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 HFONT hFont = CreateFontW(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                     OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
                 HFONT hOld = (HFONT)SelectObject(hdc, hFont);
-                SetTextColor(hdc, RGB(0, 0, 0));
+                
+                // Text color based on dark mode
+                COLORREF textColorWin = g_ui.darkMode ? RGB(245, 240, 230) : RGB(0, 0, 0);
+                SetTextColor(hdc, textColorWin);
                 SetBkMode(hdc, TRANSPARENT);
 
                 // composition buffer display
@@ -1257,22 +1473,32 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     int top = 60;
                     RECT it = { left, top, left + itemW, top + itemH };
 
-                    // draw candidate background and border
-                    COLORREF bgColor = (idx == g_ui.selected) ? RGB(0, 120, 215) : RGB(255, 255, 255);
-                    HBRUSH hbr = CreateSolidBrush(bgColor);
+                    // draw candidate background and border - dark mode support
+                    COLORREF bgColorCandidate = (idx == g_ui.selected) 
+                        ? RGB(0, 120, 215) 
+                        : (g_ui.darkMode ? RGB(60, 60, 65) : RGB(255, 255, 255));
+                    HBRUSH hbr = CreateSolidBrush(bgColorCandidate);
                     FillRect(hdc, &it, hbr);
-                    FrameRect(hdc, &it, (HBRUSH)GetStockObject(BLACK_BRUSH));
+                    
+                    COLORREF borderColorCandidate = g_ui.darkMode ? RGB(80, 80, 80) : RGB(0, 0, 0);
+                    HBRUSH borderBrush = CreateSolidBrush(borderColorCandidate);
+                    FrameRect(hdc, &it, borderBrush);
+                    DeleteObject(borderBrush);
                     DeleteObject(hbr);
 
                     // draw text
-                    SetTextColor(hdc, (idx == g_ui.selected) ? RGB(255, 255, 255) : RGB(0, 0, 0));
+                    COLORREF candTextColor = (idx == g_ui.selected) 
+                        ? RGB(255, 255, 255) 
+                        : (g_ui.darkMode ? RGB(245, 240, 230) : RGB(0, 0, 0));
+                    SetTextColor(hdc, candTextColor);
                     DrawTextW(hdc, g_ui.items[idx].c_str(), (int)g_ui.items[idx].size(), &it, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
                     // draw index number
                     RECT numRc = { left + 4, top + 4, left + 24, top + 20 };
                     std::wstringstream ss;
                     ss << (i + 1);
-                    SetTextColor(hdc, RGB(100, 100, 100));
+                    COLORREF numColor = g_ui.darkMode ? RGB(150, 150, 150) : RGB(100, 100, 100);
+                    SetTextColor(hdc, numColor);
                     DrawTextW(hdc, ss.str().c_str(), (int)ss.str().size(), &numRc, DT_LEFT | DT_TOP | DT_SINGLELINE);
                 }
 
@@ -1281,7 +1507,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 std::wstringstream pss;
                 pss << L"Page " << (g_ui.pageIndex + 1) << L"/" << (std::max)(1, totalPages);
                 RECT pageRc = { rc.left + 10, 44 + itemH + 8 + 8, rc.right - 10, 44 + itemH + 8 + 24 };
-                SetTextColor(hdc, RGB(80, 80, 80));
+                COLORREF pageColor = g_ui.darkMode ? RGB(180, 180, 180) : RGB(80, 80, 80);
+                SetTextColor(hdc, pageColor);
                 DrawTextW(hdc, pss.str().c_str(), (int)pss.str().size(), &pageRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
                 SelectObject(hdc, hOld);
@@ -1300,6 +1527,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if (g_hwndSchemeReference) {
             DestroyWindow(g_hwndSchemeReference);
             g_hwndSchemeReference = NULL;
+        }
+        if (g_hwndAboutDialog) {
+            DestroyWindow(g_hwndAboutDialog);
+            g_hwndAboutDialog = NULL;
+        }
+        if (g_hwndAboutDialog) {
+            DestroyWindow(g_hwndAboutDialog);
+            g_hwndAboutDialog = NULL;
         }
         PostQuitMessage(0);
         return 0;

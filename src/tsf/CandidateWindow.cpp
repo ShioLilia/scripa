@@ -110,15 +110,44 @@ void CCandidateWindow::Move(int x, int y)
     }
 }
 
-void CCandidateWindow::Update(const std::vector<std::wstring>& candidates, int selected)
+void CCandidateWindow::Update(const std::vector<std::wstring>& candidates, int selected, int pageIndex)
 {
     _candidates = candidates;
     _selectedIndex = selected;
+    _pageIndex = pageIndex;
     
     if (_hwnd)
     {
         InvalidateRect(_hwnd, NULL, TRUE);
     }
+}
+
+void CCandidateWindow::NextPage()
+{
+    int totalPages = GetTotalPages();
+    if (_pageIndex < totalPages - 1)
+    {
+        _pageIndex++;
+        if (_hwnd)
+            InvalidateRect(_hwnd, NULL, TRUE);
+    }
+}
+
+void CCandidateWindow::PrevPage()
+{
+    if (_pageIndex > 0)
+    {
+        _pageIndex--;
+        if (_hwnd)
+            InvalidateRect(_hwnd, NULL, TRUE);
+    }
+}
+
+int CCandidateWindow::GetTotalPages() const
+{
+    if (_candidates.empty())
+        return 1;
+    return (_candidates.size() + _itemsPerPage - 1) / _itemsPerPage;
 }
 
 LRESULT CALLBACK CCandidateWindow::_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -253,8 +282,8 @@ void CCandidateWindow::_OnLButtonDown(int x, int y)
         POINT pt = {x, y};
         if (PtInRect(&it, pt))
         {
-            // Notify text service to select this candidate
-            _pTextService->_OnCandidateSelected(idx);
+            // Notify text service to select this candidate (pass page-relative index)
+            _pTextService->_OnCandidateSelected(i);
             return;
         }
     }

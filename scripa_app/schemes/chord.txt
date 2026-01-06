@@ -1,0 +1,7 @@
+CG C5
+CEG Cmaj
+CEbG Cmin
+CDG Csus2
+CFG Csus4
+CEGBb C7
+//以上为示例，还在考虑要不要全写。是否可以直接按钮/输入+计算音程？计算会不会复杂？
