@@ -1,7 +1,12 @@
-CG C5
-CEG Cmaj
-CEbG Cmin
-CDG Csus2
-CFG Csus4
-CEGBb C7
-//以上为示例，还在考虑要不要全写。是否可以直接按钮/输入+计算音程？计算会不会复杂？
+a,gss,btt A
+as,bt,ctt A#
+b,ass,ct B
+c,bs,dtt C
+cs,dt C#
+d,css,ett D
+ds,et D#
+e,dss,ft E
+f,es,gtt F
+fs,gt F#
+g,fss,att G
+gs,at G#
