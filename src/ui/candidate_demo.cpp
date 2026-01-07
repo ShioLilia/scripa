@@ -13,6 +13,7 @@
 #include <locale>
 #include <codecvt>
 #include <map>
+#include <set>
 #include <fstream>
 #include "../tsf/ScripaTSF.h"
 #include "../core/Dic.hpp"
@@ -90,10 +91,295 @@ struct CandidateUI {
     bool modeIPA = true;
     bool visible = false;
     bool darkMode = false;  // 夜间模式
+    bool chordMode = false;  // 和弦模式（在Other Settings中启用）
+    
+    // Chord mode specific
+    std::vector<std::wstring> chordSequence;  // 按键序列（C, C#, D...）
+    std::wstring chordResult;  // 和弦名称结果（如Cmaj）
 };
 
 static CandidateUI g_ui;
 static ScripaTSF g_backend;
+
+// Saved schemes state before entering chord mode
+static std::vector<std::string> g_savedEnabledSchemes;
+
+// Helper: Convert note name to semitone value (C=0, C#=1, D=2, etc.)
+int GetSemitone(const std::wstring& note) {
+    if (note.empty()) return -1;
+    
+    wchar_t base = note[0];
+    int semitone = -1;
+    
+    // Map base note to semitone
+    switch (base) {
+        case L'C': semitone = 0; break;
+        case L'D': semitone = 2; break;
+        case L'E': semitone = 4; break;
+        case L'F': semitone = 5; break;
+        case L'G': semitone = 7; break;
+        case L'A': semitone = 9; break;
+        case L'B': semitone = 11; break;
+        default: return -1;
+    }
+    
+    // Check for sharp (#) or flat (b)
+    if (note.length() > 1) {
+        if (note[1] == L'#') {
+            semitone = (semitone + 1) % 12;
+        } else if (note[1] == L'b') {
+            semitone = (semitone - 1 + 12) % 12;
+        }
+    }
+    
+    return semitone;
+}
+
+// Helper: Calculate intervals from root note
+std::vector<int> CalculateIntervals(const std::vector<std::wstring>& notes) {
+    std::vector<int> intervals;
+    if (notes.empty()) return intervals;
+    
+    int root = GetSemitone(notes[0]);
+    if (root < 0) return intervals;
+    
+    intervals.push_back(0);  // Root is always 0
+    int previousSemitone = root;
+    int octaveOffset = 0;
+    
+    // Calculate intervals for remaining notes
+    for (size_t i = 1; i < notes.size(); ++i) {
+        const auto& note = notes[i];
+        int semitone = GetSemitone(note);
+        if (semitone < 0) continue;
+        
+        // If current note's semitone <= previous note's semitone, it's in next octave
+        if (semitone <= previousSemitone) {
+            octaveOffset += 12;
+        }
+        
+        // Calculate interval from root with octave offset
+        int interval = (semitone - root + octaveOffset);
+        
+        intervals.push_back(interval);
+        previousSemitone = semitone;
+    }
+    
+    return intervals;
+}
+
+// Helper: Identify chord type from intervals
+std::wstring IdentifyChordType(const std::vector<int>& intervals) {
+    if (intervals.empty()) return L"";
+    
+    // Sort intervals and create a pattern
+    std::vector<int> sorted = intervals;
+    std::sort(sorted.begin(), sorted.end());
+    
+    // Remove duplicates and get unique intervals within first octave
+    std::set<int> uniqueIntervals;
+    for (int interval : sorted) {
+        uniqueIntervals.insert(interval % 12);
+    }
+    
+    // Convert to vector for pattern matching
+    std::vector<int> pattern(uniqueIntervals.begin(), uniqueIntervals.end());
+    
+    // Match common chord patterns (intervals from root)
+    // Major triad: 0, 4, 7
+    if (pattern == std::vector<int>{0, 4, 7}) return L"maj";
+    
+    // Minor triad: 0, 3, 7
+    if (pattern == std::vector<int>{0, 3, 7}) return L"min";
+    
+    // Suspended 2nd: 0, 2, 7
+    if (pattern == std::vector<int>{0, 2, 7}) return L"sus2";
+    
+    // Suspended 4th: 0, 5, 7
+    if (pattern == std::vector<int>{0, 5, 7}) return L"sus4";
+    
+    // Diminished: 0, 3, 6
+    if (pattern == std::vector<int>{0, 3, 6}) return L"dim";
+    
+    // Augmented: 0, 4, 8
+    if (pattern == std::vector<int>{0, 4, 8}) return L"aug";
+    
+    // Power chord (5th): 0, 7
+    if (pattern == std::vector<int>{0, 7}) return L"5";
+    
+    // Dominant 7th: 0, 4, 7, 10
+    if (pattern == std::vector<int>{0, 4, 7, 10}) return L"7";
+    
+    // Major 7th: 0, 4, 7, 11
+    if (pattern == std::vector<int>{0, 4, 7, 11}) return L"M7";
+    
+    // Minor 7th: 0, 3, 7, 10
+    if (pattern == std::vector<int>{0, 3, 7, 10}) return L"m7";
+    
+    // Minor major 7th: 0, 3, 7, 11
+    if (pattern == std::vector<int>{0, 3, 7, 11}) return L"mM7";
+    
+    // Major 6th: 0, 4, 7, 9
+    if (pattern == std::vector<int>{0, 4, 7, 9}) return L"6";
+    
+    // Minor 6th: 0, 3, 7, 9
+    if (pattern == std::vector<int>{0, 3, 7, 9}) return L"min6";
+    
+    // Dominant 9th: 0, 4, 7, 10, 14 (or 2 within octave)
+    if (pattern == std::vector<int>{0, 4, 7, 10, 14}) return L"9";
+    
+    // Major 9th: 0, 4, 7, 11, 14 (or 2)
+    if (pattern == std::vector<int>{0, 4, 7, 11, 14}) return L"maj9";
+    
+    // Minor 9th: 0, 3, 7, 10, 14 (or 2)
+    if (pattern == std::vector<int>{0, 3, 7, 10, 14}) return L"min9";
+    
+    // Add9: 0, 4, 7, 14 (or 2)
+    if (pattern == std::vector<int>{0, 4, 7, 14}) return L"add9";
+    
+    // Half-diminished 7th: 0, 3, 6, 10
+    if (pattern == std::vector<int>{0, 3, 6, 10}) return L"m7b5";
+    
+    // Diminished 7th: 0, 3, 6, 9
+    if (pattern == std::vector<int>{0, 3, 6, 9}) return L"dim7";
+    
+    // If no match, return empty
+    return L"";
+}
+
+// Helper: Detect inversion and return new root index and suffix
+std::pair<int, std::wstring> DetectInversion(const std::vector<std::wstring>& notes, const std::vector<int>& intervals) {
+    if (notes.size() < 3 || intervals.size() < 3) {
+        return {0, L""};
+    }
+    
+    // Check for 6th interval (8 or 9 semitones) - indicates 1st inversion
+    for (size_t i = 1; i < intervals.size(); ++i) {
+        int interval = intervals[i] % 12;
+        if (interval == 8 || interval == 9) {
+            // This is likely the root in 1st inversion
+            return {(int)i, L"/1st"};
+        }
+    }
+    
+    // Check for 4th interval (5 semitones) - indicates 2nd inversion
+    for (size_t i = 1; i < intervals.size(); ++i) {
+        int interval = intervals[i] % 12;
+        if (interval == 5) {
+            // This might be the root in 2nd inversion
+            return {(int)i, L"/2nd"};
+        }
+    }
+    
+    // Check for 2nd interval (2 semitones) - less common
+    for (size_t i = 1; i < intervals.size(); ++i) {
+        int interval = intervals[i] % 12;
+        if (interval == 2) {
+            return {(int)i, L"/sus2"};
+        }
+    }
+    
+    return {0, L""};
+}
+
+// Helper: Match chord names using interval calculation algorithm
+std::vector<std::wstring> MatchChordNames(const std::vector<std::wstring>& chordSequence) {
+    std::vector<std::wstring> results;
+    
+    if (chordSequence.empty()) {
+        return results;
+    }
+    
+    // Special case: single note
+    if (chordSequence.size() == 1) {
+        results.push_back(chordSequence[0]);
+        return results;
+    }
+    
+    // Calculate intervals from the first note (assumed root)
+    std::vector<int> intervals = CalculateIntervals(chordSequence);
+    
+    if (intervals.empty()) {
+        return results;
+    }
+    
+    // Try to identify the chord in root position first
+    std::wstring rootNote = chordSequence[0];
+    std::wstring chordType = IdentifyChordType(intervals);
+    
+    if (!chordType.empty()) {
+        // Found chord in root position
+        results.push_back(rootNote + chordType);
+    }
+    
+    // Check for inversions
+    auto [inversionIndex, inversionSuffix] = DetectInversion(chordSequence, intervals);
+    if (inversionIndex > 0 && inversionIndex < (int)chordSequence.size()) {
+        // Recalculate with new root
+        std::vector<std::wstring> reorderedNotes;
+        for (size_t i = inversionIndex; i < chordSequence.size(); ++i) {
+            reorderedNotes.push_back(chordSequence[i]);
+        }
+        for (size_t i = 0; i < inversionIndex; ++i) {
+            reorderedNotes.push_back(chordSequence[i]);
+        }
+        
+        std::vector<int> newIntervals = CalculateIntervals(reorderedNotes);
+        std::wstring newChordType = IdentifyChordType(newIntervals);
+        
+        if (!newChordType.empty()) {
+            // Found inverted chord
+            std::wstring inversionName = reorderedNotes[0] + newChordType;
+            inversionName += L"/" + chordSequence[0];  // Add bass note
+            results.push_back(inversionName);
+        }
+    }
+    
+    // If no chord identified, just show the notes
+    if (results.empty()) {
+        std::wstring noteList;
+        for (const auto& note : chordSequence) {
+            if (!noteList.empty()) noteList += L"+";
+            noteList += note;
+        }
+        results.push_back(noteList);
+    }
+    
+    return results;
+}
+
+// Helper: Update chord results after sequence changes
+void UpdateChordResults(HWND hwnd) {
+    // Build display string: "C+E+G"
+    std::wstring newResult = L"";
+    for (size_t i = 0; i < g_ui.chordSequence.size(); ++i) {
+        if (i > 0) newResult += L"+";
+        newResult += g_ui.chordSequence[i];
+    }
+    
+    // Get chord name candidates
+    auto chordNames = MatchChordNames(g_ui.chordSequence);
+    
+    // Update candidate items
+    std::vector<std::wstring> newItems;
+    if (chordNames.empty()) {
+        newItems = {L""};
+    } else {
+        newItems = chordNames;
+    }
+    
+    // Only redraw if something actually changed
+    bool changed = (newResult != g_ui.chordResult) || (newItems != g_ui.items);
+    
+    g_ui.chordResult = newResult;
+    g_ui.items = newItems;
+    g_ui.selected = 0;
+    g_ui.pageIndex = 0;
+    
+    if (changed) {
+        InvalidateRect(hwnd, NULL, FALSE);
+    }
+}
 
 // Configuration file path
 static const wchar_t* CONFIG_FILE = L"..\\scripa_config.ini";
@@ -129,6 +415,8 @@ void LoadConfig() {
             }
         } else if (key == L"darkMode") {
             g_ui.darkMode = (value == L"1" || value == L"true");
+        } else if (key == L"chordMode") {
+            g_ui.chordMode = (value == L"1" || value == L"true");
         } else if (key == L"enabledSchemes") {
             // Parse comma-separated scheme list
             std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
@@ -140,7 +428,7 @@ void LoadConfig() {
                 g_backend.DisableScheme(scheme);
             }
             
-            // Then enable listed schemes
+            // Then enable listed schemes (but skip chord if not in chord mode)
             size_t start = 0;
             while (start < schemes.length()) {
                 size_t end = schemes.find(',', start);
@@ -151,8 +439,11 @@ void LoadConfig() {
                 scheme.erase(0, scheme.find_first_not_of(" \t"));
                 scheme.erase(scheme.find_last_not_of(" \t") + 1);
                 
-                if (!scheme.empty()) {
+                // Skip chord and chord2 schemes - they will be enabled later if chordMode is true
+                if (!scheme.empty() && scheme != "chord" && scheme != "chord2") {
                     g_backend.EnableScheme(scheme);
+                    // Save IPA schemes for later restoration when exiting chord mode
+                    g_savedEnabledSchemes.push_back(scheme);
                 }
                 
                 start = end + 1;
@@ -161,6 +452,16 @@ void LoadConfig() {
     }
     
     file.close();
+    
+    // If chord mode is enabled, enable chord and chord2 schemes
+    if (g_ui.chordMode) {
+        g_backend.EnableScheme("chord");
+        g_backend.EnableScheme("chord2");
+        // g_savedEnabledSchemes now contains the IPA mode schemes
+    } else {
+        // Not in chord mode, clear saved schemes
+        g_savedEnabledSchemes.clear();
+    }
 }
 
 // Save configuration to file
@@ -175,12 +476,13 @@ void SaveConfig() {
     
     file << L"itemsPerPage=" << g_ui.itemsPerPage << L"\n";
     file << L"darkMode=" << (g_ui.darkMode ? L"1" : L"0") << L"\n";
+    file << L"chordMode=" << (g_ui.chordMode ? L"1" : L"0") << L"\n";
     
-    // Save enabled schemes
+    // Save enabled schemes (exclude chord and chord2 - they're managed by chordMode)
     auto allSchemes = g_backend.GetAvailableSchemes();
     std::wstring enabledSchemes;
     for (const auto& scheme : allSchemes) {
-        if (g_backend.IsSchemeEnabled(scheme)) {
+        if (scheme != "chord" && scheme != "chord2" && g_backend.IsSchemeEnabled(scheme)) {
             std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
             if (!enabledSchemes.empty()) enabledSchemes += L",";
             enabledSchemes += conv.from_bytes(scheme);
@@ -223,6 +525,17 @@ RECT g_btnMode = {0, 0, 0, 0};
 RECT g_btnLeft = {0, 0, 0, 0};
 RECT g_btnRight = {0, 0, 0, 0};
 RECT g_btnSettings = {0, 0, 0, 0};
+
+// Piano keyboard buttons for chord mode (12 keys)
+// White keys: C D E F G A B (7 keys)
+// Black keys: C# D# F# G# A# (5 keys)
+struct PianoKey {
+    std::wstring note;
+    RECT rect;
+    bool isBlack;
+};
+
+static std::vector<PianoKey> g_pianoKeys;
 
 // Settings menu popup window
 static HWND g_hwndSettingsMenu = NULL;
@@ -290,11 +603,13 @@ void ShowAboutDialog(HWND hwndParent);
 LRESULT CALLBACK OtherSettingsDlgProc(HWND hwndDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     static HWND hComboItemsPerPage = NULL;
+    static HWND hCheckChordMode = NULL;
     
     switch (msg) {
     case WM_INITDIALOG:
     {
-        // Create label
+        {
+        // Create label for items per page
         CreateWindowW(L"STATIC", L"Words per page (4-10):",
             WS_CHILD | WS_VISIBLE | SS_LEFT,
             20, 20, 200, 20,
@@ -316,26 +631,36 @@ LRESULT CALLBACK OtherSettingsDlgProc(HWND hwndDlg, UINT msg, WPARAM wParam, LPA
             }
         }
         
+        // Create Chord Mode checkbox
+        hCheckChordMode = CreateWindowW(L"BUTTON", L"Enable Chord Mode (piano keyboard)",
+            WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+            20, 85, 300, 20,
+            hwndDlg, (HMENU)1002, GetModuleHandle(NULL), NULL);
+        
+        SendMessageW(hCheckChordMode, BM_SETCHECK, g_ui.chordMode ? BST_CHECKED : BST_UNCHECKED, 0);
+        
         // Create Apply and Cancel buttons
         CreateWindowW(L"BUTTON", L"Apply",
             WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-            80, 90, 80, 30,
+            80, 120, 80, 30,
             hwndDlg, (HMENU)IDOK, GetModuleHandle(NULL), NULL);
         
         CreateWindowW(L"BUTTON", L"Cancel",
             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            180, 90, 80, 30,
+            180, 120, 80, 30,
             hwndDlg, (HMENU)IDCANCEL, GetModuleHandle(NULL), NULL);
         
         return TRUE;
+        }
     }
     
     case WM_COMMAND:
     {
+        {
         int id = LOWORD(wParam);
         
         if (id == IDOK) {
-            // Get selected value
+            // Get selected items per page value
             int sel = (int)SendMessageW(hComboItemsPerPage, CB_GETCURSEL, 0, 0);
             if (sel != CB_ERR) {
                 int newItemsPerPage = 4 + sel;
@@ -347,14 +672,76 @@ LRESULT CALLBACK OtherSettingsDlgProc(HWND hwndDlg, UINT msg, WPARAM wParam, LPA
                 if (g_ui.pageIndex >= totalPages) {
                     g_ui.pageIndex = (std::max)(0, totalPages - 1);
                 }
-                
-                // Save configuration
-                SaveConfig();
-                
-                // Refresh main window
-                if (g_hwndParentMain) {
-                    InvalidateRect(g_hwndParentMain, NULL, TRUE);
+            }
+            
+            // Get chord mode checkbox state
+            LRESULT chordChecked = SendMessageW(hCheckChordMode, BM_GETCHECK, 0, 0);
+            bool wasChordMode = g_ui.chordMode;
+            g_ui.chordMode = (chordChecked == BST_CHECKED);
+            
+            // Manage schemes based on chord mode
+            if (g_ui.chordMode && !wasChordMode) {
+                // Entering chord mode
+                // 1. Save current enabled schemes
+                g_savedEnabledSchemes.clear();
+                auto allSchemes = g_backend.GetAvailableSchemes();
+                for (const auto& scheme : allSchemes) {
+                    if (scheme != "chord" && scheme != "chord2" && g_backend.IsSchemeEnabled(scheme)) {
+                        g_savedEnabledSchemes.push_back(scheme);
+                    }
                 }
+                
+                // 2. Disable all schemes except chord and chord2
+                for (const auto& scheme : allSchemes) {
+                    if (scheme != "chord" && scheme != "chord2") {
+                        g_backend.DisableScheme(scheme);
+                    }
+                }
+                
+                // 3. Enable chord and chord2 schemes
+                g_backend.EnableScheme("chord");
+                g_backend.EnableScheme("chord2");
+                g_backend.ReloadSchemes();
+                
+            } else if (!g_ui.chordMode && wasChordMode) {
+                // Exiting chord mode
+                // 1. Disable chord and chord2 schemes
+                g_backend.DisableScheme("chord");
+                g_backend.DisableScheme("chord2");
+                
+                // 2. Restore previously saved schemes
+                for (const auto& scheme : g_savedEnabledSchemes) {
+                    g_backend.EnableScheme(scheme);
+                }
+                g_savedEnabledSchemes.clear();
+                
+                g_backend.ReloadSchemes();
+            }
+            
+            // Clear chord sequence if disabling
+            if (!g_ui.chordMode) {
+                g_ui.chordSequence.clear();
+                g_ui.chordResult.clear();
+            }
+            
+            // Adjust window size based on chord mode
+            if (g_hwndParentMain) {
+                RECT rcWindow;
+                GetWindowRect(g_hwndParentMain, &rcWindow);
+                int width = rcWindow.right - rcWindow.left;
+                int baseHeight = 170;  // Original height
+                int newHeight = g_ui.chordMode ? 320 : baseHeight;
+                
+                SetWindowPos(g_hwndParentMain, NULL, rcWindow.left, rcWindow.top, 
+                            width, newHeight, SWP_NOZORDER);
+            }
+            
+            // Save configuration
+            SaveConfig();
+            
+            // Refresh main window
+            if (g_hwndParentMain) {
+                InvalidateRect(g_hwndParentMain, NULL, TRUE);
             }
             
             DestroyWindow(hwndDlg);
@@ -367,6 +754,7 @@ LRESULT CALLBACK OtherSettingsDlgProc(HWND hwndDlg, UINT msg, WPARAM wParam, LPA
         }
         
         break;
+        }
     }
     
     case WM_CLOSE:
@@ -396,7 +784,7 @@ void ShowOtherSettingsDialog(HWND hwndParent)
         L"OtherSettingsDialog",
         L"Other Settings",
         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
-        CW_USEDEFAULT, CW_USEDEFAULT, 350, 180,
+        CW_USEDEFAULT, CW_USEDEFAULT, 380, 210,
         hwndParent,
         NULL,
         GetModuleHandle(NULL),
@@ -438,6 +826,9 @@ LRESULT CALLBACK SchemeSelectionDlgProc(HWND hwndDlg, UINT msg, WPARAM wParam, L
         
         // Categorize schemes
         for (const auto& scheme : allSchemes) {
+            // Skip chord and chord2 schemes - they're managed by chord mode setting
+            if (scheme == "chord" || scheme == "chord2") continue;
+            
             if (scheme == "default" || scheme == "simple" || scheme == "tones") {
                 defaultGroup.schemes.push_back(scheme);
             } else if (scheme == "chinese") {
@@ -893,7 +1284,7 @@ LRESULT CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         // Author info
         Font normalFont(&fontFamily, 12, FontStyleRegular, UnitPixel);
         RectF infoRect(0, 60, (REAL)rc.right, 80);
-        g.DrawString(L"Author: ShioLilia\nVersion: 0.0.5.1\nVersion Nickname: Nocturne\nLicense: GPLv3 and MIT", -1, &normalFont, infoRect, &format, &textBrush);
+        g.DrawString(L"Author: ShioLilia\nVersion: 0.0.5.2\nVersion Nickname: Nocturne\nLicense: GPLv3 and MIT", -1, &normalFont, infoRect, &format, &textBrush);
         
         // GitHub button
         if (githubIcon && githubIcon->GetLastStatus() == Ok) {
@@ -1268,6 +1659,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             
             g_backend.clearBuffer();  // 清空初始 buffer
             g_ui.modeIPA = g_backend.GetMode();  // sync with backend
+            
             g_ui.composition = g_backend.GetComposition();
             g_ui.items = g_backend.GetCandidates();
             // 不再使用假数据，如果没有候选就留空
@@ -1277,6 +1669,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             g_ui.selected = 0;
             g_ui.pageIndex = 0;
             g_ui.visible = true;
+            
+            // Initialize piano keyboard for chord mode
+            g_pianoKeys.clear();
+            // Will be positioned dynamically in WM_PAINT
         }
         return 0;
 
@@ -1304,12 +1700,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
                 
                 // 清空 buffer 并重置 UI
+                if (g_ui.chordMode) {
+                    g_ui.chordSequence.clear();
+                    g_ui.chordResult.clear();
+                }
                 g_backend.clearBuffer();
                 g_ui.composition = L"";
                 g_ui.items = { L"" };
                 g_ui.selected = 0;
                 g_ui.pageIndex = 0;
-                InvalidateRect(hwnd, NULL, TRUE);
+                InvalidateRect(hwnd, NULL, FALSE);
             }
             return 0;  // 阻止生成 WM_CHAR
         }
@@ -1323,17 +1723,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             g_ui.items = g_backend.GetCandidates();
             g_ui.selected = 0;
             g_ui.pageIndex = 0;
-            InvalidateRect(hwnd, NULL, TRUE);
+            InvalidateRect(hwnd, NULL, FALSE);
             return 0;
         }
         if (wParam == VK_RIGHT) {
             g_ui.selected = (g_ui.selected + 1) % (int)g_ui.items.size();
-            InvalidateRect(hwnd, NULL, TRUE);
+            InvalidateRect(hwnd, NULL, FALSE);
             return 0;
         }
         if (wParam == VK_LEFT) {
             g_ui.selected = (g_ui.selected - 1 + (int)g_ui.items.size()) % (int)g_ui.items.size();
-            InvalidateRect(hwnd, NULL, TRUE);
+            InvalidateRect(hwnd, NULL, FALSE);
             return 0;
         }
         if (wParam == VK_RETURN) {
@@ -1351,13 +1751,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     MessageBoxW(hwnd, L"Failed to copy to clipboard", L"ScrIPA Error", MB_OK | MB_ICONERROR);
                 }
                 
-                // 清空 buffer 并重置 UI
+                // In chord mode, clear chord sequence; in normal mode, clear buffer
+                if (g_ui.chordMode) {
+                    g_ui.chordSequence.clear();
+                    g_ui.chordResult.clear();
+                }
                 g_backend.clearBuffer();
                 g_ui.composition = L"";
                 g_ui.items = { L"" };
                 g_ui.selected = 0;
                 g_ui.pageIndex = 0;
-                InvalidateRect(hwnd, NULL, TRUE);
+                InvalidateRect(hwnd, NULL, FALSE);
             }
             return 0;
         }
@@ -1379,20 +1783,74 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             // page navigation
             if (ch == L'[') {
                 if (g_ui.pageIndex > 0) g_ui.pageIndex--;
-                InvalidateRect(hwnd, NULL, TRUE);
+                InvalidateRect(hwnd, NULL, FALSE);
                 return 0;
             }
             if (ch == L']') {
                 int totalPages = (int)((g_ui.items.size() + g_ui.itemsPerPage - 1) / g_ui.itemsPerPage);
                 if (g_ui.pageIndex + 1 < totalPages) g_ui.pageIndex++;
-                InvalidateRect(hwnd, NULL, TRUE);
+                InvalidateRect(hwnd, NULL, FALSE);
                 return 0;
             }
 
             // 小键盘数字会到达这里，作为普通字符输入
             // 大键盘数字已在 WM_KEYDOWN 中被拦截，不会到达这里
 
-            // forward character to backend and refresh UI
+            // Special handling for chord mode
+            if (g_ui.chordMode) {
+                // Space or Enter key: confirm current note and add to sequence
+                if (ch == L' ' || ch == L'\r') {
+                    auto candidates = g_backend.GetCandidates();
+                    
+                    // If we have a candidate, add it to the chord sequence
+                    if (!candidates.empty() && !candidates[0].empty()) {
+                        std::wstring noteName = candidates[0];
+                        g_ui.chordSequence.push_back(noteName);
+                        
+                        // Update chord results and candidates
+                        UpdateChordResults(hwnd);
+                        
+                        // Clear composition buffer for next note
+                        g_backend.clearBuffer();
+                        g_ui.composition = L"";
+                    }
+                    return 0;
+                }
+                
+                // Regular character: try to add to current composition
+                // First, save the previous composition and candidates
+                std::wstring prevComposition = g_ui.composition;
+                auto prevCandidates = g_backend.GetCandidates();
+                
+                // Try adding the new character
+                bool handled = g_backend.OnKeyDown(ch);
+                g_ui.composition = g_backend.GetComposition();
+                auto newCandidates = g_backend.GetCandidates();
+                
+                // Check if the new composition has valid candidates
+                if (newCandidates.empty() || newCandidates[0].empty()) {
+                    // No valid candidates with new character
+                    // This means we should confirm the previous note and start fresh
+                    if (!prevComposition.empty() && !prevCandidates.empty() && !prevCandidates[0].empty()) {
+                        // Confirm the previous note
+                        g_ui.chordSequence.push_back(prevCandidates[0]);
+                        
+                        // Clear and restart with the new character
+                        g_backend.clearBuffer();
+                        g_backend.OnKeyDown(ch);
+                        g_ui.composition = g_backend.GetComposition();
+                        newCandidates = g_backend.GetCandidates();
+                    }
+                }
+                
+                // Update chord results with current sequence
+                UpdateChordResults(hwnd);
+                
+                InvalidateRect(hwnd, NULL, FALSE);
+                return 0;
+            }
+            
+            // Normal mode: forward character to backend and refresh UI
             bool handled = g_backend.OnKeyDown(ch);
             g_ui.composition = g_backend.GetComposition();
             g_ui.items = g_backend.GetCandidates();
@@ -1403,7 +1861,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             int totalPages = (int)((g_ui.items.size() + g_ui.itemsPerPage - 1) / g_ui.itemsPerPage);
             if (g_ui.pageIndex >= totalPages) g_ui.pageIndex = (std::max)(0, totalPages - 1);
             g_ui.selected = 0;  // reset selection to first item
-            InvalidateRect(hwnd, NULL, TRUE);
+            InvalidateRect(hwnd, NULL, FALSE);
             return 0;
         }
 
@@ -1472,18 +1930,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
                 g_ui.pageIndex = 0;
                 g_ui.selected = 0;
-                InvalidateRect(hwnd, NULL, TRUE);
+                InvalidateRect(hwnd, NULL, FALSE);
                 return 0;
             }
             if (PtInRect(&g_btnLeft, POINT{x, y})) {
                 if (g_ui.pageIndex > 0) g_ui.pageIndex--;
-                InvalidateRect(hwnd, NULL, TRUE);
+                InvalidateRect(hwnd, NULL, FALSE);
                 return 0;
             }
             if (PtInRect(&g_btnRight, POINT{x, y})) {
                 int totalPages = (int)((g_ui.items.size() + g_ui.itemsPerPage - 1) / g_ui.itemsPerPage);
                 if (g_ui.pageIndex + 1 < totalPages) g_ui.pageIndex++;
-                InvalidateRect(hwnd, NULL, TRUE);
+                InvalidateRect(hwnd, NULL, FALSE);
                 return 0;
             }
             if (PtInRect(&g_btnSettings, POINT{x, y})) {
@@ -1551,19 +2009,76 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                             MessageBoxW(hwnd, L"Failed to copy to clipboard", L"ScrIPA Error", MB_OK | MB_ICONERROR);
                         }
                         
-                        // 清空 buffer 并重置 UI
+                        // In chord mode, clear chord sequence; in normal mode, clear buffer
+                        if (g_ui.chordMode) {
+                            g_ui.chordSequence.clear();
+                            g_ui.chordResult.clear();
+                        }
                         g_backend.clearBuffer();
                         g_ui.composition = L"";
                         g_ui.items = { L"" };
                         g_ui.selected = 0;
                         g_ui.pageIndex = 0;
-                        InvalidateRect(hwnd, NULL, TRUE);
+                        InvalidateRect(hwnd, NULL, FALSE);
                         return 0;
+                    }
+                }
+            }
+            
+            // Check piano keyboard keys (only when Chord mode enabled)
+            // Check BLACK keys first (they are on top of white keys)
+            if (g_ui.chordMode) {
+                bool keyClicked = false;
+                
+                // First check black keys
+                for (const auto& key : g_pianoKeys) {
+                    if (key.isBlack && PtInRect(&key.rect, POINT{x, y})) {
+                        // Add note to sequence
+                        g_ui.chordSequence.push_back(key.note);
+                        
+                        // Update chord results and candidates
+                        UpdateChordResults(hwnd);
+                        
+                        keyClicked = true;
+                        break;
+                    }
+                }
+                
+                // Then check white keys if no black key was clicked
+                if (!keyClicked) {
+                    for (const auto& key : g_pianoKeys) {
+                        if (!key.isBlack && PtInRect(&key.rect, POINT{x, y})) {
+                            // Add note to sequence
+                            g_ui.chordSequence.push_back(key.note);
+                            
+                            // Update chord results and candidates
+                            UpdateChordResults(hwnd);
+                            
+                            return 0;
+                        }
                     }
                 }
             }
         }
         return 0;
+
+    case WM_RBUTTONDOWN:
+        // Right-click to clear chord sequence in Chord mode
+        if (g_ui.chordMode) {
+            g_ui.chordSequence.clear();
+            g_ui.chordResult.clear();
+            g_ui.items = {L""};
+            g_ui.selected = 0;
+            g_ui.pageIndex = 0;
+            g_backend.clearBuffer();
+            g_ui.composition = L"";
+            InvalidateRect(hwnd, NULL, FALSE);
+        }
+        return 0;
+
+    case WM_ERASEBKGND:
+        // Prevent default erase to reduce flicker (we'll paint everything in WM_PAINT)
+        return 1;
 
     case WM_PAINT:
         {
@@ -1571,8 +2086,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             HDC hdc = BeginPaint(hwnd, &ps);
             RECT rc;
             GetClientRect(hwnd, &rc);
-
-            Graphics g(hdc);
+            
+            // Create memory DC for double buffering
+            HDC hdcMem = CreateCompatibleDC(hdc);
+            HBITMAP hbmMem = CreateCompatibleBitmap(hdc, rc.right, rc.bottom);
+            HBITMAP hbmOld = (HBITMAP)SelectObject(hdcMem, hbmMem);
+            
+            // Now draw to hdcMem instead of hdc
+            Graphics g(hdcMem);
             g.SetSmoothingMode(SmoothingModeAntiAlias);
 
             // Background - dark mode support
@@ -1689,17 +2210,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             {
                 HFONT hFont = CreateFontW(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                     OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
-                HFONT hOld = (HFONT)SelectObject(hdc, hFont);
+                HFONT hOld = (HFONT)SelectObject(hdcMem, hFont);
                 
                 // Text color based on dark mode
                 COLORREF textColorWin = g_ui.darkMode ? RGB(245, 240, 230) : RGB(0, 0, 0);
-                SetTextColor(hdc, textColorWin);
-                SetBkMode(hdc, TRANSPARENT);
+                SetTextColor(hdcMem, textColorWin);
+                SetBkMode(hdcMem, TRANSPARENT);
 
                 // composition buffer display
                 RECT compRc = {10, 45, rc.right - 10, 58};
                 std::wstring comp = L"Buffer: " + g_ui.composition;
-                DrawTextW(hdc, comp.c_str(), (int)comp.size(), &compRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+                DrawTextW(hdcMem, comp.c_str(), (int)comp.size(), &compRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
                 // draw candidates
                 int itemCount = (int)g_ui.items.size();
@@ -1721,11 +2242,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                         ? RGB(0, 120, 215) 
                         : (g_ui.darkMode ? RGB(60, 60, 65) : RGB(255, 255, 255));
                     HBRUSH hbr = CreateSolidBrush(bgColorCandidate);
-                    FillRect(hdc, &it, hbr);
+                    FillRect(hdcMem, &it, hbr);
                     
                     COLORREF borderColorCandidate = g_ui.darkMode ? RGB(80, 80, 80) : RGB(0, 0, 0);
                     HBRUSH borderBrush = CreateSolidBrush(borderColorCandidate);
-                    FrameRect(hdc, &it, borderBrush);
+                    FrameRect(hdcMem, &it, borderBrush);
                     DeleteObject(borderBrush);
                     DeleteObject(hbr);
 
@@ -1733,16 +2254,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     COLORREF candTextColor = (idx == g_ui.selected) 
                         ? RGB(255, 255, 255) 
                         : (g_ui.darkMode ? RGB(245, 240, 230) : RGB(0, 0, 0));
-                    SetTextColor(hdc, candTextColor);
-                    DrawTextW(hdc, g_ui.items[idx].c_str(), (int)g_ui.items[idx].size(), &it, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    SetTextColor(hdcMem, candTextColor);
+                    DrawTextW(hdcMem, g_ui.items[idx].c_str(), (int)g_ui.items[idx].size(), &it, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
                     // draw index number
                     RECT numRc = { left + 4, top + 4, left + 24, top + 20 };
                     std::wstringstream ss;
                     ss << (i + 1);
                     COLORREF numColor = g_ui.darkMode ? RGB(150, 150, 150) : RGB(100, 100, 100);
-                    SetTextColor(hdc, numColor);
-                    DrawTextW(hdc, ss.str().c_str(), (int)ss.str().size(), &numRc, DT_LEFT | DT_TOP | DT_SINGLELINE);
+                    SetTextColor(hdcMem, numColor);
+                    DrawTextW(hdcMem, ss.str().c_str(), (int)ss.str().size(), &numRc, DT_LEFT | DT_TOP | DT_SINGLELINE);
                 }
 
                 // draw page indicator
@@ -1751,12 +2272,125 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 pss << L"Page " << (g_ui.pageIndex + 1) << L"/" << (std::max)(1, totalPages);
                 RECT pageRc = { rc.left + 10, 44 + itemH + 8 + 8, rc.right - 10, 44 + itemH + 8 + 24 };
                 COLORREF pageColor = g_ui.darkMode ? RGB(180, 180, 180) : RGB(80, 80, 80);
-                SetTextColor(hdc, pageColor);
-                DrawTextW(hdc, pss.str().c_str(), (int)pss.str().size(), &pageRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                SetTextColor(hdcMem, pageColor);
+                DrawTextW(hdcMem, pss.str().c_str(), (int)pss.str().size(), &pageRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
-                SelectObject(hdc, hOld);
+                SelectObject(hdcMem, hOld);
                 DeleteObject(hFont);
             }
+            
+            // Draw piano keyboard for Chord mode
+            if (g_ui.chordMode) {
+                // Use GDI+ for piano keyboard
+                Graphics gPiano(hdcMem);
+                gPiano.SetSmoothingMode(SmoothingModeAntiAlias);
+                
+                // Piano keyboard position (below candidates area)
+                int pianoY = 140;
+                int whiteKeyW = 50;
+                int whiteKeyH = 80;
+                int blackKeyW = 30;
+                int blackKeyH = 50;
+                int startX = 20;
+                
+                // Clear and rebuild piano keys
+                g_pianoKeys.clear();
+                
+                // White keys: C D E F G A B
+                const wchar_t* whiteNotes[] = {L"C", L"D", L"E", L"F", L"G", L"A", L"B"};
+                for (int i = 0; i < 7; ++i) {
+                    int x = startX + i * whiteKeyW;
+                    RECT keyRect = {x, pianoY, x + whiteKeyW, pianoY + whiteKeyH};
+                    
+                    PianoKey key;
+                    key.note = whiteNotes[i];
+                    key.rect = keyRect;
+                    key.isBlack = false;
+                    g_pianoKeys.push_back(key);
+                    
+                    // Draw white key
+                    SolidBrush whiteBrush(Color(255, 255, 255, 255));
+                    gPiano.FillRectangle(&whiteBrush, x, pianoY, whiteKeyW - 1, whiteKeyH);
+                    
+                    Pen blackPen(Color(255, 0, 0, 0), 2);
+                    gPiano.DrawRectangle(&blackPen, x, pianoY, whiteKeyW - 1, whiteKeyH);
+                    
+                    // Draw note label
+                    FontFamily fontFamily(L"Segoe UI");
+                    Font noteFont(&fontFamily, 12, FontStyleBold, UnitPixel);
+                    SolidBrush textBrush(Color(255, 0, 0, 0));
+                    StringFormat format;
+                    format.SetAlignment(StringAlignmentCenter);
+                    format.SetLineAlignment(StringAlignmentFar);
+                    RectF labelRect((REAL)x, (REAL)(pianoY + whiteKeyH - 25), (REAL)whiteKeyW, 20.0f);
+                    gPiano.DrawString(whiteNotes[i], -1, &noteFont, labelRect, &format, &textBrush);
+                }
+                
+                // Black keys: C# D# (skip) F# G# A#
+                const wchar_t* blackNotes[] = {L"C#", L"D#", nullptr, L"F#", L"G#", L"A#"};
+                const wchar_t* blackEnharmonic[] = {L"Db", L"Eb", nullptr, L"Gb", L"Ab", L"Bb"};
+                for (int i = 0; i < 6; ++i) {
+                    if (blackNotes[i] == nullptr) continue;  // No black key between E-F
+                    
+                    int x = startX + i * whiteKeyW + whiteKeyW - blackKeyW / 2;
+                    RECT keyRect = {x, pianoY, x + blackKeyW, pianoY + blackKeyH};
+                    
+                    PianoKey key;
+                    key.note = blackNotes[i];
+                    key.rect = keyRect;
+                    key.isBlack = true;
+                    g_pianoKeys.push_back(key);
+                    
+                    // Draw black key
+                    SolidBrush blackBrush(Color(255, 30, 30, 30));
+                    gPiano.FillRectangle(&blackBrush, x, pianoY, blackKeyW, blackKeyH);
+                    
+                    Pen borderPen(Color(255, 0, 0, 0), 1);
+                    gPiano.DrawRectangle(&borderPen, x, pianoY, blackKeyW, blackKeyH);
+                    
+                    // Draw enharmonic label (Db, Eb, etc.) at top
+                    FontFamily fontFamily(L"Segoe UI");
+                    Font enharmonicFont(&fontFamily, 8, FontStyleRegular, UnitPixel);
+                    SolidBrush textBrush(Color(255, 180, 180, 180));
+                    StringFormat format;
+                    format.SetAlignment(StringAlignmentCenter);
+                    format.SetLineAlignment(StringAlignmentNear);
+                    RectF enharmonicRect((REAL)x, (REAL)(pianoY + 5), (REAL)blackKeyW, 12.0f);
+                    gPiano.DrawString(blackEnharmonic[i], -1, &enharmonicFont, enharmonicRect, &format, &textBrush);
+                    
+                    // Draw sharp label (C#, D#, etc.) at bottom
+                    Font noteFont(&fontFamily, 9, FontStyleBold, UnitPixel);
+                    SolidBrush whiteBrush(Color(255, 255, 255, 255));
+                    format.SetLineAlignment(StringAlignmentFar);
+                    RectF labelRect((REAL)x, (REAL)(pianoY + blackKeyH - 18), (REAL)blackKeyW, 15.0f);
+                    gPiano.DrawString(blackNotes[i], -1, &noteFont, labelRect, &format, &whiteBrush);
+                }
+                
+                // Draw chord sequence and result
+                int resultY = pianoY + whiteKeyH + 15;
+                HFONT hFont2 = CreateFontW(14, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                    OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+                HFONT hOld2 = (HFONT)SelectObject(hdcMem, hFont2);
+                
+                COLORREF chordTextColor = g_ui.darkMode ? RGB(245, 240, 230) : RGB(0, 0, 0);
+                SetTextColor(hdcMem, chordTextColor);
+                SetBkMode(hdcMem, TRANSPARENT);
+                
+                std::wstring chordDisplay = L"Notes: " + (g_ui.chordResult.empty() ? L"(press keys or click piano)" : g_ui.chordResult);
+                RECT chordRc = {startX, resultY, rc.right - 20, resultY + 25};
+                DrawTextW(hdcMem, chordDisplay.c_str(), (int)chordDisplay.size(), &chordRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+                
+                SelectObject(hdcMem, hOld2);
+                DeleteObject(hFont2);
+            }
+            
+            // Copy from memory DC to screen DC (double buffer)
+            BitBlt(hdc, 0, 0, rc.right, rc.bottom, hdcMem, 0, 0, SRCCOPY);
+            
+            // Clean up memory DC
+            SelectObject(hdcMem, hbmOld);
+            DeleteObject(hbmMem);
+            DeleteDC(hdcMem);
 
             EndPaint(hwnd, &ps);
         }
@@ -1784,7 +2418,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
     // Initialize GDI+
     GdiplusStartupInput gdiSI;

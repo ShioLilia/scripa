@@ -28,6 +28,11 @@ ScrIPA, 一款新设计的IPA输入法。包括了一种独特的、更科学更
 
 6.在设置按钮下，可以通过窗口编辑和客制化自己的custom库。
 
+### 和弦模式 v0.0.5.2新增
+
+点按钢琴键盘，在备选栏会输出当前和弦。enter键可以复制到剪贴板。
+
+输入音名，每个音名之间请按空格确认。abcdefg。sharp=s, flat=t。确认后备选栏会输出当前和弦，enter键可以复制到剪贴板。
 
 ### 编码库
 default-default:默认。也就是新转写方式。
@@ -84,45 +89,3 @@ custom: Completely up to you.
 
 
 
-## Français / French 
-
-ScrIPA est une méthode de saisie IPA nouvellement conçue. Elle comprend un système de codage par défaut unique, plus scientifique et plus facile à mémoriser.
-
-##### La version v0.0.5xx est publiée. Téléchargez directement le paquet complet et lancez le fichier scripa_app/build/0.0.5xx.exe.
-
-### Mode d’emploi
-
-Saisissez des lettres : elles sont automatiquement converties en symboles IPA, couvrant presque tous les symboles couramment utilisés de l’Alphabet Phonétique International.
-
-Appuyez sur Entrée (par défaut : le premier candidat), sur une touche numérique du clavier principal, ou cliquez avec la souris pour copier le résultat sélectionné dans le presse-papiers.
-
-Appuyez sur la barre d’espace pour mettre temporairement en réserve la sortie actuelle (par défaut : le premier candidat ; si vous ne le souhaitez pas, tapez séparément), insérer un espace, puis continuer la saisie. Les entrées suivantes n’affecteront pas les sorties déjà enregistrées, ce qui facilite la copie-collage groupée.
-
-### Fonctionnalités
-
-Les touches numériques du clavier principal servent à sélectionner les candidats, tandis que les touches du pavé numérique servent à saisir des chiffres.
-(Les utilisateurs sans pavé numérique pourront désactiver ou reconfigurer ces touches 【non encore implémenté】.)
-
-Le bouton en forme de livre à gauche permet d’ouvrir la table mémo de la bibliothèque de codage par défaut.
-Cette table est actuellement manuscrite, et certains symboles IPA qui n’y figurent pas ne sont pas affichés. Une version plus complète et interactive sera conçue ultérieurement.
-
-Il est possible d’activer ou de désactiver certaines bibliothèques de transcription. Cela vise à faciliter l’utilisation pour des langues spécifiques.
-
-Vous pouvez éditer et personnaliser votre propre bibliothèque custom directement dans la fenêtre du programme.
-
-### Bibliothèques de codage
-
-default-default : Bibliothèque par défaut, c’est-à-dire le nouveau système de transcription.
-
-default-simple : Notation simplifiée, utilisant des formes IPA courantes et habituelles.
-
-default-tones : Tons. Tous les symboles de hauteur et de contours tonals y sont inclus.
-
-specialized-chinese : Mode chinois, facilitant la saisie des valeurs tonales, de l’érhua, de l’aspiration, etc. Conçu pour les étudiants en linguistique chinoise.
-
-specialized-music-chord : Saisie des noms de notes, sortie d’accords. 【Non encore implémenté】
-
-custom : À votre entière liberté.
-
-
- 
