@@ -206,6 +206,7 @@ std::wstring IdentifyChordType(const std::vector<int>& intervals) {
     
     // Power chord (5th): 0, 7
     if (pattern == std::vector<int>{0, 7}) return L"5";
+    /////////////////////////////////////////
     
     // Dominant 7th: 0, 4, 7, 10
     if (pattern == std::vector<int>{0, 4, 7, 10}) return L"7";
@@ -224,19 +225,34 @@ std::wstring IdentifyChordType(const std::vector<int>& intervals) {
     
     // Minor 6th: 0, 3, 7, 9
     if (pattern == std::vector<int>{0, 3, 7, 9}) return L"min6";
+    /////////////////////////////////////////
     
-    // Dominant 9th: 0, 4, 7, 10, 14 (or 2 within octave)
+    // Dominant 9th: 0, 4, 7, 10, 13 
+    if (pattern == std::vector<int>{0, 4, 7, 10, 13}) return L"7b9";
+    
+    // Major 9th: 0, 4, 7, 11, 13 
+    if (pattern == std::vector<int>{0, 4, 7, 11, 13}) return L"M7b9";
+    
+    // Minor 9th: 0, 3, 7, 10, 13
+    if (pattern == std::vector<int>{0, 3, 7, 10, 13}) return L"m7b9";
+    
+    // Add9: 0, 4, 7, 13
+    if (pattern == std::vector<int>{0, 4, 7, 13}) return L"addb9";
+ /////////////////////////////////////////   
+
+    // Dominant 9th: 0, 4, 7, 10, 14 
     if (pattern == std::vector<int>{0, 4, 7, 10, 14}) return L"9";
     
-    // Major 9th: 0, 4, 7, 11, 14 (or 2)
-    if (pattern == std::vector<int>{0, 4, 7, 11, 14}) return L"maj9";
+    // Major 9th: 0, 4, 7, 11, 14
+    if (pattern == std::vector<int>{0, 4, 7, 11, 14}) return L"M9";
     
-    // Minor 9th: 0, 3, 7, 10, 14 (or 2)
-    if (pattern == std::vector<int>{0, 3, 7, 10, 14}) return L"min9";
+    // Minor 9th: 0, 3, 7, 10, 14
+    if (pattern == std::vector<int>{0, 3, 7, 10, 14}) return L"m9";
     
-    // Add9: 0, 4, 7, 14 (or 2)
+    // Add9: 0, 4, 7, 14 
     if (pattern == std::vector<int>{0, 4, 7, 14}) return L"add9";
-    
+/////////////////////////////////////////
+
     // Half-diminished 7th: 0, 3, 6, 10
     if (pattern == std::vector<int>{0, 3, 6, 10}) return L"m7b5";
     
