@@ -2,9 +2,14 @@ scripa_v0.0.4 'Lakshmi'
 v0.0.400
 scripa_v0.0.5 'Nocturne'
 v0.0.5.1
-scripa_v0.0.6 'Jayavarman'
+v0.0.5.2
+v0.0.5.3
+scripa_v0.0.6 'Aquinas'
 scripa_v0.0.7 'Mandala'
 scripa_v0.0.8 'Smarta'
 scripa_v0.0.9 'Shiva'
 scripa_v0.0.10 'Dharma'
 scripa_v0.0.11 ''
+
+
+khmey_v0.0.1 'Jayavarman'
