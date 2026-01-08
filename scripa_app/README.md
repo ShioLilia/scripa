@@ -4,7 +4,7 @@
 
 ScrIPA, 一款新设计的IPA输入法。包括了一种独特的、更科学更好记的默认编码方式。
 
-##### v0.0.5已经发布，直接下载，点击scripa_app/build/0.0.5xx.exe运行。只需要下载 scripa_app/一个文件夹的内容即可使用。
+##### v0.0.5已经发布，点击scripa_app/build/0.0.5xx.exe运行。
 
 ### 使用方法
 
@@ -42,8 +42,6 @@ default-simple:简记法。是音标的可能常用，惯用的形式。
 default-tones:音调。所有调值符号都在这里。
 
 specitalized-chinese:汉语模式，使调值、儿化音、送气音等更容易打出。旨在造福汉语语言学学生。
-
-specialized-music-chord:输入音符的音名，输出和弦。【尚未实装】
 
 custom:任君选择。
 

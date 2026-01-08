@@ -168,98 +168,135 @@ std::vector<int> CalculateIntervals(const std::vector<std::wstring>& notes) {
     return intervals;
 }
 
-// Helper: Identify chord type from intervals
+// Chord pattern structure using bitmap
+struct ChordPattern {
+    uint16_t baseBitmap;      // 12位：0-11半音
+    uint16_t extensionBitmap; // 12位：12-23半音（映射到0-11）
+    uint16_t requiredBits;    // 必需音位（用于检测omit）
+    const wchar_t* name;
+};
+
+// 辅助函数：构建位图
+static void BuildBitmaps(const std::vector<int>& intervals, uint16_t& baseBitmap, uint16_t& extBitmap) {
+    baseBitmap = 0;
+    extBitmap = 0;
+    
+    // 第一步：收集所有0-11范围的音到baseBitmap
+    for (int interval : intervals) {
+        if (interval < 12) {
+            baseBitmap |= (1 << interval);
+        }
+    }
+    
+    // 第二步：处理12-23范围的音
+    for (int interval : intervals) {
+        if (interval >= 12 && interval < 24) {
+            int baseNote = interval % 12;  // 模12得到对应的基础音
+            
+            // 检查这个音在低八度（0-11）是否已存在
+            bool existsInLowerOctave = false;
+            for (int i : intervals) {
+                if (i < 12 && i == baseNote) {
+                    existsInLowerOctave = true;
+                    break;
+                }
+            }
+            
+            if (existsInLowerOctave) {
+                // 低八度存在，这只是重复音，归并到baseBitmap（已经设置过了）
+                // 不做任何操作
+            } else {
+                // 低八度不存在，这是真正的扩展音（如9,11,13）
+                extBitmap |= (1 << (interval - 12));
+            }
+        }
+    }
+}
+
+// 辅助函数：检查是否匹配（允许额外音）
+static bool MatchesPattern(uint16_t bitmap, uint16_t pattern) {
+    return (bitmap & pattern) == pattern;
+}
+
+// 辅助函数：检测缺失音
+static std::wstring DetectOmit(uint16_t bitmap, uint16_t required) {
+    if ((bitmap & (1 << 3)) == 0 && (bitmap & (1 << 4)) == 0 && (required & ((1 << 3) | (1 << 4)))) {
+        return L"omit3";
+    }
+    if ((bitmap & (1 << 7)) == 0 && (required & (1 << 7))) {
+        return L"omit5";
+    }
+    return L"";
+}
+
+// Helper: Identify chord type from intervals using bitmap algorithm
 std::wstring IdentifyChordType(const std::vector<int>& intervals) {
     if (intervals.empty()) return L"";
     
-    // Sort intervals and create a pattern
-    std::vector<int> sorted = intervals;
-    std::sort(sorted.begin(), sorted.end());
+    // 构建位图：基础音(0-11)和扩展音(12-23)
+    uint16_t baseBitmap = 0;
+    uint16_t extBitmap = 0;
+    BuildBitmaps(intervals, baseBitmap, extBitmap);
     
-    // Remove duplicates and get unique intervals within first octave
-    std::set<int> uniqueIntervals;
-    for (int interval : sorted) {
-        uniqueIntervals.insert(interval % 12);
+    // 和弦模式表（按复杂度排序，先匹配复杂和弦）
+    static const ChordPattern patterns[] = {
+        // 扩展和弦（9, 11, 13）- 注意：位从右往左，位0在最右
+        {0b0000010010010001, 0b0000000000000100, 0b0000010010010001, L"9"},      // 0,4,7,10,14
+        {0b0000100010010001, 0b0000000000000100, 0b0000100010010001, L"M9"},     // 0,4,7,11,14
+        {0b0000010010001001, 0b0000000000000100, 0b0000010010001001, L"m9"},     // 0,3,7,10,14
+        {0b0000010010010001, 0b0000000000100000, 0b0000010010010001, L"11"},     // 0,4,7,10,17
+        {0b0000010010010001, 0b0000001000000000, 0b0000010010010001, L"13"},     // 0,4,7,10,21
+        {0b0000010010010001, 0b0000001000100000, 0b0000010010010001, L"13"},     // 0,4,7,10,17,21
+        
+        // add和弦（不含7音）
+        {0b0000000010010101, 0b0000000000000000, 0b0000000010010101, L"add9"},   // 0,2,4,7 (低八度9音)
+        {0b0000000010010001, 0b0000000000000100, 0b0000000010010001, L"add9"},   // 0,4,7,14 (高八度9音)
+        {0b0000000010110001, 0b0000000000000000, 0b0000000010110001, L"add11"},  // 0,4,5,7
+        {0b0000001010010001, 0b0000000000000000, 0b0000001010010001, L"add13"},  // 0,4,7,9
+        
+        // 七和弦
+        {0b0000010010010001, 0b0000000000000000, 0b0000010010010001, L"7"},      // 0,4,7,10
+        {0b0000100010010001, 0b0000000000000000, 0b0000100010010001, L"M7"},     // 0,4,7,11
+        {0b0000010010001001, 0b0000000000000000, 0b0000010010001001, L"m7"},     // 0,3,7,10
+        {0b0000100010001001, 0b0000000000000000, 0b0000100010001001, L"mM7"},    // 0,3,7,11
+        {0b0000010001001001, 0b0000000000000000, 0b0000010001001001, L"m7b5"},   // 0,3,6,10
+        {0b0000001001001001, 0b0000000000000000, 0b0000001001001001, L"dim7"},   // 0,3,6,9
+        
+        // 六和弦
+        {0b0000001010010001, 0b0000000000000000, 0b0000001010010001, L"6"},      // 0,4,7,9
+        {0b0000001010001001, 0b0000000000000000, 0b0000001010001001, L"m6"},     // 0,3,7,9
+        
+        // 三和弦
+        {0b0000000010010001, 0b0000000000000000, 0b0000000010010001, L"maj"},    // 0,4,7
+        {0b0000000010001001, 0b0000000000000000, 0b0000000010001001, L"min"},    // 0,3,7
+        {0b0000000010000101, 0b0000000000000000, 0b0000000010000101, L"sus2"},   // 0,2,7
+        {0b0000000010100001, 0b0000000000000000, 0b0000000010100001, L"sus4"},   // 0,5,7
+        {0b0000000001001001, 0b0000000000000000, 0b0000000001001001, L"dim"},    // 0,3,6
+        {0b0000000100010001, 0b0000000000000000, 0b0000000100010001, L"aug"},    // 0,4,8
+        {0b0000000010000001, 0b0000000000000000, 0b0000000010000001, L"5"},      // 0,7
+        
+        // omit和弦（用全匹配）
+        {0b0000010010000001, 0b0000000000000000, 0b0000010010010001, L"7omit3"}, // 0,7,10 (缺3或4)
+        {0b0000010000010001, 0b0000000000000000, 0b0000010010010001, L"7omit5"}, // 0,4,10 (缺7)
+        {0b0000100010000001, 0b0000000000000000, 0b0000100010010001, L"M7omit3"},// 0,7,11
+        {0b0000100000010001, 0b0000000000000000, 0b0000100010010001, L"M7omit5"},// 0,4,11
+    };
+    
+    // 遍历模式表
+    for (const auto& pattern : patterns) {
+        bool baseMatch = (baseBitmap == pattern.baseBitmap);
+        bool extMatch = (extBitmap == pattern.extensionBitmap);
+        
+        if (baseMatch && extMatch) {
+            // 检测omit
+            std::wstring omit = DetectOmit(baseBitmap, pattern.requiredBits);
+            if (!omit.empty() && wcsstr(pattern.name, L"omit") == nullptr) {
+                return std::wstring(pattern.name) + omit;
+            }
+            return pattern.name;
+        }
     }
     
-    // Convert to vector for pattern matching
-    std::vector<int> pattern(uniqueIntervals.begin(), uniqueIntervals.end());
-    
-    // Match common chord patterns (intervals from root)
-    // Major triad: 0, 4, 7
-    if (pattern == std::vector<int>{0, 4, 7}) return L"maj";
-    
-    // Minor triad: 0, 3, 7
-    if (pattern == std::vector<int>{0, 3, 7}) return L"min";
-    
-    // Suspended 2nd: 0, 2, 7
-    if (pattern == std::vector<int>{0, 2, 7}) return L"sus2";
-    
-    // Suspended 4th: 0, 5, 7
-    if (pattern == std::vector<int>{0, 5, 7}) return L"sus4";
-    
-    // Diminished: 0, 3, 6
-    if (pattern == std::vector<int>{0, 3, 6}) return L"dim";
-    
-    // Augmented: 0, 4, 8
-    if (pattern == std::vector<int>{0, 4, 8}) return L"aug";
-    
-    // Power chord (5th): 0, 7
-    if (pattern == std::vector<int>{0, 7}) return L"5";
-    /////////////////////////////////////////
-    
-    // Dominant 7th: 0, 4, 7, 10
-    if (pattern == std::vector<int>{0, 4, 7, 10}) return L"7";
-    
-    // Major 7th: 0, 4, 7, 11
-    if (pattern == std::vector<int>{0, 4, 7, 11}) return L"M7";
-    
-    // Minor 7th: 0, 3, 7, 10
-    if (pattern == std::vector<int>{0, 3, 7, 10}) return L"m7";
-    
-    // Minor major 7th: 0, 3, 7, 11
-    if (pattern == std::vector<int>{0, 3, 7, 11}) return L"mM7";
-    
-    // Major 6th: 0, 4, 7, 9
-    if (pattern == std::vector<int>{0, 4, 7, 9}) return L"6";
-    
-    // Minor 6th: 0, 3, 7, 9
-    if (pattern == std::vector<int>{0, 3, 7, 9}) return L"min6";
-    /////////////////////////////////////////
-    
-    // Dominant 9th: 0, 4, 7, 10, 13 
-    if (pattern == std::vector<int>{0, 4, 7, 10, 13}) return L"7b9";
-    
-    // Major 9th: 0, 4, 7, 11, 13 
-    if (pattern == std::vector<int>{0, 4, 7, 11, 13}) return L"M7b9";
-    
-    // Minor 9th: 0, 3, 7, 10, 13
-    if (pattern == std::vector<int>{0, 3, 7, 10, 13}) return L"m7b9";
-    
-    // Add9: 0, 4, 7, 13
-    if (pattern == std::vector<int>{0, 4, 7, 13}) return L"addb9";
- /////////////////////////////////////////   
-
-    // Dominant 9th: 0, 4, 7, 10, 14 
-    if (pattern == std::vector<int>{0, 4, 7, 10, 14}) return L"9";
-    
-    // Major 9th: 0, 4, 7, 11, 14
-    if (pattern == std::vector<int>{0, 4, 7, 11, 14}) return L"M9";
-    
-    // Minor 9th: 0, 3, 7, 10, 14
-    if (pattern == std::vector<int>{0, 3, 7, 10, 14}) return L"m9";
-    
-    // Add9: 0, 4, 7, 14 
-    if (pattern == std::vector<int>{0, 4, 7, 14}) return L"add9";
-/////////////////////////////////////////
-
-    // Half-diminished 7th: 0, 3, 6, 10
-    if (pattern == std::vector<int>{0, 3, 6, 10}) return L"m7b5";
-    
-    // Diminished 7th: 0, 3, 6, 9
-    if (pattern == std::vector<int>{0, 3, 6, 9}) return L"dim7";
-    
-    // If no match, return empty
     return L"";
 }
 
