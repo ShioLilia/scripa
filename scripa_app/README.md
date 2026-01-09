@@ -4,7 +4,7 @@
 
 ScrIPA, 一款新设计的IPA输入法。包括了一种独特的、更科学更好记的默认编码方式。
 
-##### v0.0.5已经发布，点击scripa_app/build/0.0.5xx.exe运行。
+##### v0.0.6已经发布，点击scripa_app/build/0.0.6.exe运行。
 
 ### 使用方法
 
@@ -49,7 +49,7 @@ custom:任君选择。
 
 ScrIPA, a new input method for IPA. It features a unique default encoding system that is more scientific and easier to memorize.
 
-##### v0.0.5 has been released. Download the full package directly and run the scripa_app/build/0.0.5xx.exe file.
+##### v0.0.6 has been released. Download the full package directly and run the scripa_app/build/0.0.6.exe file.
 
 ### How to Use
 

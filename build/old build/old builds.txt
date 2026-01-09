@@ -5,6 +5,7 @@ v0.0.5.1
 v0.0.5.2
 v0.0.5.3
 scripa_v0.0.6 'Aquinas'
+
 scripa_v0.0.7 'Mandala'
 scripa_v0.0.8 'Smarta'
 scripa_v0.0.9 'Shiva'

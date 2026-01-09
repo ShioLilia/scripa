@@ -1337,7 +1337,7 @@ LRESULT CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         // Author info
         Font normalFont(&fontFamily, 12, FontStyleRegular, UnitPixel);
         RectF infoRect(0, 60, (REAL)rc.right, 80);
-        g.DrawString(L"Author: ShioLilia\nVersion: 0.0.6\nVersion Aquinas: Nocturne\nLicense: GPLv3 and MIT", -1, &normalFont, infoRect, &format, &textBrush);
+        g.DrawString(L"Author: ShioLilia\nVersion: 0.0.6\nVersion Nickname: Aquinas\nLicense: GPLv3 and MIT", -1, &normalFont, infoRect, &format, &textBrush);
         
         // GitHub button
         if (githubIcon && githubIcon->GetLastStatus() == Ok) {
